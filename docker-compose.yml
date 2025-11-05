@@ -1,5 +1,6 @@
 version: '3.8'
 
+
 services:
   database:
     image: postgres:15
@@ -12,7 +13,17 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./backend/db:/docker-entrypoint-initdb.d
+  backend:
+    build: ./backend
+    restart: always
+    depends_on:
+      - database
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend:/app
+    env_file:
+      - .env
 
 volumes:
   postgres-data:
