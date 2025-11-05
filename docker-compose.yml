@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  database:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: madziarynka_pos
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./backend/db:/docker-entrypoint-initdb.d
+
+volumes:
+  postgres-data:
