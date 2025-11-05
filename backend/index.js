@@ -15,7 +15,7 @@ app.post('/api/login', async (req, res) => {
   try {
     console.log('Otrzymano próbę logowania. Ciało zapytania (req.body):', req.body);
     const { profile, pin } = req.body;
-    if (profile === "Manager" && pin === "123") {
+    if (profile === "Manager" && pin) { // Sprawdzamy tylko, czy pin istnieje (nie jest pusty)
       res.status(200).json({ "success": true, "message": "Zalogowano pomyślnie", "user": { "name": "Manager", "role": "admin" } });
     } else {
       res.status(401).json({ "success": false, "message": "Nieprawidłowy profil lub PIN" });
