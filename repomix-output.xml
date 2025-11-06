@@ -2304,63 +2304,6 @@ INSERT INTO product_ingredients (product_id, ingredient_id, quantity_needed) VAL
   Run `npm run dev` to start the development server.
 </file>
 
-<file path="frontend/src/components/NewOrderModal.tsx">
-import { useState, useEffect } from 'react';
-import { Button } from './ui/button';
-import { Card } from './ui/card';
-import { ScrollArea } from './ui/scroll-area';
-import { Coffee, Croissant, IceCream, Wine, Trash2, X } from 'lucide-react';
-import { productsAPI, Product, Order, OrderItem } from '../services/api';
-⋮----
-type ProductWithQuantity = Product & {
-  quantity: number;
-};
-⋮----
-type OrderWithItems = Order & {
-  items: OrderItem[];
-};
-⋮----
-type ProductGroup = {
-  id: string;
-  name: string;
-  icon: any;
-  color: string;
-};
-⋮----
-type NewOrderModalProps = {
-  isOpen: boolean;
-  onClose: () => void;
-  onSubmit: (items: ProductWithQuantity[], total: number) => void;
-  selectedGroup: string | null;
-  setSelectedGroup: (group: string | null) => void;
-  cart: ProductWithQuantity[];
-  setCart: React.Dispatch<React.SetStateAction<ProductWithQuantity[]>>;
-  editingOrder?: OrderWithItems | null;
-};
-⋮----
-const loadProducts = async () =>
-⋮----
-const addToCart = (product: Product) =>
-⋮----
-const removeFromCart = (productId: number) =>
-⋮----
-const updateQuantity = (productId: number, delta: number) =>
-⋮----
-const getTotalPrice = () =>
-⋮----
-const handleSubmit = () =>
-⋮----
-const getProductsByGroup = (groupName: string) =>
-⋮----
-{/* Header */}
-⋮----
-{/* Content */}
-⋮----
-{/* Product area */}
-⋮----
-{/* Cart */}
-</file>
-
 <file path="frontend/src/components/tabs/LogsTab.tsx">
 import { useState, useEffect } from 'react';
 import { Card } from '../ui/card';
@@ -2390,142 +2333,6 @@ const formatTime = (timestamp: string) =>
 ⋮----
 const getModuleBadge = (module: string) =>
 ⋮----
-</file>
-
-<file path="frontend/src/components/tabs/MenuTab.tsx">
-import { useState, useEffect } from 'react';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Card } from '../ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Badge } from '../ui/badge';
-import { Pencil, Trash2, Plus, X } from 'lucide-react';
-import { toast } from 'sonner';
-import { User } from '../../services/api';
-import { productsAPI, ingredientsAPI, Ingredient, Product, ProductIngredient } from '../../services/api';
-⋮----
-type MenuTabProps = {
-  user: User;
-};
-⋮----
-type ProductWithIngredients = Product & {
-  bomDisplay?: string;
-  ingredients?: ProductIngredient[];
-};
-⋮----
-type IngredientSelection = ProductIngredient;
-⋮----
-// Load products and ingredients on component mount
-⋮----
-const loadData = async () =>
-⋮----
-// Load BOM for each product
-⋮----
-const formatBOM = (product: ProductWithIngredients): string =>
-⋮----
-const handleAdd = () =>
-⋮----
-const handleEdit = async (item: ProductWithIngredients) =>
-⋮----
-// Load current ingredients for this product
-⋮----
-const handleDelete = async (id: number) =>
-⋮----
-const addIngredientToProduct = () =>
-⋮----
-const removeIngredientFromProduct = (index: number) =>
-⋮----
-const updateIngredient = (index: number, field: keyof IngredientSelection, value: string | number) =>
-⋮----
-const handleSave = async () =>
-⋮----
-// Validate ingredients
-⋮----
-// Update existing product
-⋮----
-// Reload BOM for the updated product
-⋮----
-// Create new product
-⋮----
-// Load BOM for the new product
-⋮----
-{/* Basic Product Information */}
-⋮----
-{/* BOM (Bill of Materials) Section */}
-⋮----
-value=
-onValueChange=
-</file>
-
-<file path="frontend/src/components/tabs/OrdersTab.tsx">
-import { useState, useEffect } from 'react';
-import { Button } from '../ui/button';
-import { Card } from '../ui/card';
-import { ScrollArea } from '../ui/scroll-area';
-import { Badge } from '../ui/badge';
-import { Plus, Clock, CheckCircle, XCircle } from 'lucide-react';
-import { toast } from 'sonner';
-import { User } from '../../services/api';
-import { ordersAPI, productsAPI, Product, Order, OrderItem } from '../../services/api';
-import NewOrderModal from '../NewOrderModal';
-⋮----
-type ProductWithQuantity = Product & {
-  quantity: number;
-};
-⋮----
-type OrderWithItems = Order & {
-  items: OrderItem[];
-};
-⋮----
-type OrdersTabProps = {
-  user: User;
-};
-⋮----
-// New order dialog state
-⋮----
-// Load orders function
-const loadOrders = async () =>
-⋮----
-// Load order items for each order
-⋮----
-// Load orders and products on component mount
-⋮----
-const loadData = async () =>
-⋮----
-const handleCreateNewOrder = () =>
-⋮----
-const handleEditOrder = (order: OrderWithItems) =>
-⋮----
-const handleCloseNewOrder = () =>
-⋮----
-const handleSubmitOrder = async (items: ProductWithQuantity[], total: number) =>
-⋮----
-const handleCompleteOrder = async (orderId: number) =>
-⋮----
-// Remove completed order from list
-⋮----
-const getStatusBadge = (status: string) =>
-⋮----
-const formatTime = (timestamp: string) =>
-⋮----
-{/* Open Orders Dashboard */}
-⋮----
-{/* Paper clip effect */}
-⋮----
-{/* Order header */}
-⋮----
-
-⋮----
-{/* Order items */}
-⋮----
-{/* Total */}
-⋮----
-{/* Actions */}
-⋮----
-{/* New Order Modal */}
 </file>
 
 <file path="frontend/src/components/tabs/ReportsTab.tsx">
@@ -2590,51 +2397,6 @@ const handleSave = async () =>
 ⋮----
 const formatTime = (dateTime: string) =>
 ⋮----
-</file>
-
-<file path="frontend/src/components/tabs/WarehouseTab.tsx">
-import { useState, useEffect } from 'react';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Card } from '../ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { Badge } from '../ui/badge';
-import { Pencil, Trash2, Plus } from 'lucide-react';
-import { toast } from 'sonner';
-import { User } from '../../services/api';
-import { ingredientsAPI, Ingredient } from '../../services/api';
-⋮----
-type WarehouseTabProps = {
-  user: User;
-};
-⋮----
-type WarehouseItem = Ingredient & {
-  status?: 'OK' | 'LOW' | 'CRITICAL';
-};
-⋮----
-const loadIngredients = async () =>
-⋮----
-// FIX: Safely convert string values from DB to numbers before processing
-⋮----
-const calculateStatus = (current: number, nominal: number): 'OK' | 'LOW' | 'CRITICAL' =>
-⋮----
-const handleAdd = () =>
-⋮----
-const handleEdit = (item: WarehouseItem) =>
-⋮----
-const handleDelete = async (id: number) =>
-⋮----
-const handleDialogClose = () =>
-⋮----
-const handleSave = async () =>
-⋮----
-const getStatusBadge = (status: WarehouseItem['status']) =>
-⋮----
-const handleFormChange = (field: keyof Ingredient, value: string) =>
-⋮----
-onChange=
 </file>
 
 <file path="frontend/src/index.css">
@@ -3496,131 +3258,6 @@ button, input:where([type="button"], [type="reset"], [type="submit"]) {
 .\[\&_svg\]\:shrink-0 svg {
 </file>
 
-<file path="frontend/src/services/api.ts">
-import axios from 'axios';
-⋮----
-// Add request interceptor to include auth token
-⋮----
-// Add response interceptor to handle auth errors
-⋮----
-export interface User {
-  id: number;
-  name: string;
-  role: "admin" | "employee";
-  pin?: string; // Only present in login response
-  is_active?: boolean;
-}
-⋮----
-pin?: string; // Only present in login response
-⋮----
-export interface LoginRequest {
-  userId: string;
-  pin: string;
-}
-⋮----
-export interface LoginResponse {
-  user: User;
-  token: string;
-}
-⋮----
-export interface ApiError {
-  message: string;
-  code?: string;
-}
-⋮----
-export interface Ingredient {
-  id: number;
-  name: string;
-  unit: string;
-  stock_quantity: number;
-  nominal_stock: number;
-  is_active: boolean;
-}
-⋮----
-export interface Product {
-  id: number;
-  name: string;
-  price: number;
-  group: string;
-  is_visible: boolean;
-}
-⋮----
-export interface ProductIngredient {
-  ingredient_id: number;
-  quantity_needed: number;
-  ingredient_name?: string;
-  unit?: string;
-}
-⋮----
-export interface OrderItem {
-  id: number;
-  order_id: number;
-  product_id: number;
-  quantity: number;
-  price_per_item: number;
-  product_name?: string;
-}
-⋮----
-export interface Order {
-  id: number;
-  user_id: number;
-  status: 'open' | 'completed' | 'cancelled';
-  total_price: number;
-  created_at: string;
-  items?: OrderItem[];
-}
-⋮----
-export interface Log {
-  id: number;
-  user_id: number;
-  action: string;
-  module: string;
-  details: string;
-  created_at: string;
-  user_name?: string;
-}
-⋮----
-// === USERS API ===
-⋮----
-// === REPORTS API ===
-⋮----
-// === AUTHENTICATION API ===
-⋮----
-// === INGREDIENTS API (WAREHOUSE) ===
-⋮----
-// Axios wymaga, aby ciało żądania w metodzie DELETE było wewnątrz obiektu `data`
-⋮----
-// === PRODUCTS API (MENU) ===
-⋮----
-// === ORDERS API ===
-⋮----
-// === LOGS API ===
-⋮----
-// === REPORTS API (placeholder - can be implemented later) ===
-⋮----
-// Placeholder implementation
-⋮----
-// Placeholder implementation
-⋮----
-// Placeholder implementation
-⋮----
-// === SCHEDULE API (placeholder - can be implemented later) ===
-⋮----
-// Placeholder implementation
-⋮----
-// Placeholder implementation
-⋮----
-// Placeholder implementation
-⋮----
-// Placeholder implementation - would need user_id for logging
-⋮----
-// === LEGACY COMPATIBILITY ===
-// Backward compatibility with old API structure
-⋮----
-// export const logsAPI = newLogsAPI; // Remove duplicate
-// export const reportsAPI = newReportsAPI; // Remove duplicate
-</file>
-
 <file path="README.md">
 # Madziarynka Cafe POS v2
 
@@ -3774,20 +3411,6 @@ volumes:
 }
 </file>
 
-<file path="frontend/src/App.tsx">
-import { useState } from "react";
-import LoginScreen from "./components/LoginScreen";
-import MainLayout from "./components/MainLayout";
-import { Toaster } from "./components/ui/sonner";
-import { authAPI, User } from "./services/api";
-import { toast } from "sonner";
-⋮----
-const handleLogin = (user: User) =>
-⋮----
-// ZMIANA: Poprawiona i kompletna logika wylogowania.
-const handleLogout = async () =>
-</file>
-
 <file path="frontend/src/components/LoginScreen.tsx">
 import { useState, useEffect } from 'react';
 import { Card } from './ui/card';
@@ -3819,6 +3442,372 @@ const handleLogin = async () =>
 {/* PIN pad */}
 </file>
 
+<file path="frontend/src/components/NewOrderModal.tsx">
+import { useState, useEffect } from 'react';
+import { Button } from './ui/button';
+import { Card } from './ui/card';
+import { ScrollArea } from './ui/scroll-area';
+import { Coffee, Croissant, IceCream, Wine, Trash2, X } from 'lucide-react';
+import { productsAPI, Product, Order, OrderItem } from '../services/api';
+⋮----
+type ProductWithQuantity = Product & {
+  quantity: number;
+};
+⋮----
+type OrderWithItems = Order & {
+  items: OrderItem[];
+};
+⋮----
+type ProductGroup = {
+  id: string;
+  name: string;
+  icon: any;
+  color: string;
+};
+⋮----
+type NewOrderModalProps = {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (items: ProductWithQuantity[], total: number) => void;
+  selectedGroup: string | null;
+  setSelectedGroup: (group: string | null) => void;
+  cart: ProductWithQuantity[];
+  setCart: React.Dispatch<React.SetStateAction<ProductWithQuantity[]>>;
+  editingOrder?: OrderWithItems | null;
+};
+⋮----
+const loadProducts = async () =>
+⋮----
+const addToCart = (product: Product) =>
+⋮----
+const removeFromCart = (productId: number) =>
+⋮----
+const updateQuantity = (productId: number, delta: number) =>
+⋮----
+const getTotalPrice = () =>
+⋮----
+const handleSubmit = () =>
+⋮----
+const getProductsByGroup = (groupName: string) =>
+⋮----
+{/* Header */}
+⋮----
+{/* Content */}
+⋮----
+{/* Product area */}
+⋮----
+{/* Cart */}
+</file>
+
+<file path="frontend/src/components/tabs/MenuTab.tsx">
+import { useState, useEffect } from 'react';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Card } from '../ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { Badge } from '../ui/badge';
+import { Pencil, Trash2, Plus, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { User } from '../../services/api';
+import { productsAPI, ingredientsAPI, Ingredient, Product, ProductIngredient } from '../../services/api';
+⋮----
+type MenuTabProps = {
+  user: User;
+};
+⋮----
+type ProductWithIngredients = Product & {
+  bomDisplay?: string;
+  ingredients?: ProductIngredient[];
+};
+⋮----
+type IngredientSelection = ProductIngredient;
+⋮----
+// Load products and ingredients on component mount
+⋮----
+const loadData = async () =>
+⋮----
+// Load BOM for each product
+⋮----
+const formatBOM = (product: ProductWithIngredients): string =>
+⋮----
+const handleAdd = () =>
+⋮----
+const handleEdit = async (item: ProductWithIngredients) =>
+⋮----
+// Load current ingredients for this product
+⋮----
+const handleDelete = async (id: number) =>
+⋮----
+const addIngredientToProduct = () =>
+⋮----
+const removeIngredientFromProduct = (index: number) =>
+⋮----
+const updateIngredient = (index: number, field: keyof IngredientSelection, value: string | number) =>
+⋮----
+const handleSave = async () =>
+⋮----
+// Validate ingredients
+⋮----
+// Update existing product
+⋮----
+// Reload BOM for the updated product
+⋮----
+// Create new product
+⋮----
+// Load BOM for the new product
+⋮----
+{/* Basic Product Information */}
+⋮----
+{/* BOM (Bill of Materials) Section */}
+⋮----
+value=
+onValueChange=
+</file>
+
+<file path="frontend/src/components/tabs/OrdersTab.tsx">
+import { useState, useEffect } from 'react';
+import { Button } from '../ui/button';
+import { Card } from '../ui/card';
+import { ScrollArea } from '../ui/scroll-area';
+import { Badge } from '../ui/badge';
+import { Plus, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
+import { User } from '../../services/api';
+import { ordersAPI, productsAPI, Product, Order, OrderItem } from '../../services/api';
+import NewOrderModal from '../NewOrderModal';
+⋮----
+type ProductWithQuantity = Product & {
+  quantity: number;
+};
+⋮----
+type OrderWithItems = Order & {
+  items: OrderItem[];
+};
+⋮----
+type OrdersTabProps = {
+  user: User;
+};
+⋮----
+// New order dialog state
+⋮----
+// Load orders function
+const loadOrders = async () =>
+⋮----
+// Load order items for each order
+⋮----
+// Load orders and products on component mount
+⋮----
+const loadData = async () =>
+⋮----
+const handleCreateNewOrder = () =>
+⋮----
+const handleEditOrder = (order: OrderWithItems) =>
+⋮----
+const handleCloseNewOrder = () =>
+⋮----
+const handleSubmitOrder = async (items: ProductWithQuantity[], total: number) =>
+⋮----
+const handleCompleteOrder = async (orderId: number) =>
+⋮----
+// Remove completed order from list
+⋮----
+const getStatusBadge = (status: string) =>
+⋮----
+const formatTime = (timestamp: string) =>
+⋮----
+{/* Open Orders Dashboard */}
+⋮----
+{/* Paper clip effect */}
+⋮----
+{/* Order header */}
+⋮----
+
+⋮----
+{/* Order items */}
+⋮----
+{/* Total */}
+⋮----
+{/* Actions */}
+⋮----
+{/* New Order Modal */}
+</file>
+
+<file path="frontend/src/components/tabs/WarehouseTab.tsx">
+import { useState, useEffect } from 'react';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Card } from '../ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { Badge } from '../ui/badge';
+import { Pencil, Trash2, Plus } from 'lucide-react';
+import { toast } from 'sonner';
+import { User } from '../../services/api';
+import { ingredientsAPI, Ingredient } from '../../services/api';
+⋮----
+type WarehouseTabProps = { user: User };
+type WarehouseItem = Ingredient & { status?: 'OK' | 'LOW' | 'CRITICAL' };
+⋮----
+const loadIngredients = async () =>
+⋮----
+const calculateStatus = (current: number, nominal: number): 'OK' | 'LOW' | 'CRITICAL' =>
+⋮----
+const handleAdd = () =>
+⋮----
+const handleEdit = (item: WarehouseItem) =>
+⋮----
+const handleDelete = async (id: number) =>
+⋮----
+const handleSave = async () =>
+⋮----
+const handleFormChange = (field: keyof Ingredient, value: string) =>
+⋮----
+const getStatusBadge = (status?: 'OK' | 'LOW' | 'CRITICAL') =>
+</file>
+
+<file path="frontend/src/services/api.ts">
+import axios from 'axios';
+⋮----
+// Add request interceptor to include auth token
+⋮----
+// Add response interceptor to handle auth errors
+⋮----
+export interface User {
+  id: number;
+  name: string;
+  role: "admin" | "employee";
+  pin?: string; // Only present in login response
+  is_active?: boolean;
+}
+⋮----
+pin?: string; // Only present in login response
+⋮----
+export interface LoginRequest {
+  userId: string;
+  pin: string;
+}
+⋮----
+export interface LoginResponse {
+  user: User;
+  token: string;
+}
+⋮----
+export interface ApiError {
+  message: string;
+  code?: string;
+}
+⋮----
+export interface Ingredient {
+  id: number;
+  name: string;
+  unit: string;
+  stock_quantity: number;
+  nominal_stock: number;
+  is_active: boolean;
+}
+⋮----
+export interface Product {
+  id: number;
+  name: string;
+  price: number;
+  group: string;
+  is_visible: boolean;
+}
+⋮----
+export interface ProductIngredient {
+  ingredient_id: number;
+  quantity_needed: number;
+  ingredient_name?: string;
+  unit?: string;
+}
+⋮----
+export interface OrderItem {
+  id: number;
+  order_id: number;
+  product_id: number;
+  quantity: number;
+  price_per_item: number;
+  product_name?: string;
+}
+⋮----
+export interface Order {
+  id: number;
+  user_id: number;
+  status: 'open' | 'completed' | 'cancelled';
+  total_price: number;
+  created_at: string;
+  items?: OrderItem[];
+}
+⋮----
+export interface Log {
+  id: number;
+  user_id: number;
+  action: string;
+  module: string;
+  details: string;
+  created_at: string;
+  user_name?: string;
+}
+⋮----
+// === USERS API ===
+⋮----
+// === REPORTS API ===
+⋮----
+// === AUTHENTICATION API ===
+⋮----
+// === INGREDIENTS API (WAREHOUSE) ===
+⋮----
+// Axios wymaga, aby ciało żądania w metodzie DELETE było wewnątrz obiektu `data`
+⋮----
+// === PRODUCTS API (MENU) ===
+⋮----
+// === ORDERS API ===
+⋮----
+// === LOGS API ===
+⋮----
+// === REPORTS API (placeholder - can be implemented later) ===
+⋮----
+// Placeholder implementation
+⋮----
+// Placeholder implementation
+⋮----
+// Placeholder implementation
+⋮----
+// === SCHEDULE API (placeholder - can be implemented later) ===
+⋮----
+// Placeholder implementation
+⋮----
+// Placeholder implementation
+⋮----
+// Placeholder implementation
+⋮----
+// Placeholder implementation - would need user_id for logging
+⋮----
+// === LEGACY COMPATIBILITY ===
+// Backward compatibility with old API structure
+⋮----
+// export const logsAPI = newLogsAPI; // Remove duplicate
+// export const reportsAPI = newReportsAPI; // Remove duplicate
+</file>
+
+<file path="frontend/src/App.tsx">
+import { useState } from "react";
+import LoginScreen from "./components/LoginScreen";
+import MainLayout from "./components/MainLayout";
+import { Toaster } from "./components/ui/sonner";
+import { authAPI, User } from "./services/api";
+import { toast } from "sonner";
+⋮----
+const handleLogin = (user: User) =>
+⋮----
+// ZMIANA: Poprawiona i kompletna logika wylogowania.
+const handleLogout = async () =>
+</file>
+
 <file path="backend/index.js">
 const db = require('./db'); // Importuj połączenie z bazą
 ⋮----
@@ -3832,13 +3821,14 @@ const getClient = async () => {
 return await db.pool.connect();
 ⋮----
 // Helper function to log actions
-const logAction = async (client, userId, action, module, details) => {
-if (!userId) return; // Don't log if user is not identified
+const logAction = async (transactionClient, userId, action, module, details) => {
+const client = transactionClient || db; // Use transaction client if available, otherwise use the general pool
+⋮----
+console.error('LogAction Error: No userId provided for action:', action);
 ⋮----
 await client.query(
 ⋮----
-// Log error to console but don't crash the main transaction
-console.error('Failed to log action:', error);
+console.error(`Failed to log action [${action}]:`, error);
 ⋮----
 // === AUTHENTICATION ===
 // ZMIEŃ: Pobierz użytkowników z bazy, a nie z MOCK_USERS
@@ -3895,10 +3885,9 @@ app.post('/api/ingredients', async (req, res) => {
 ⋮----
 const { rows } = await db.query(
 ⋮----
-// Log the ingredient creation
-await logAction(db, userId, 'CREATE_INGREDIENT', 'Warehouse', `Created ingredient: ${ingredient.name}`);
+await logAction(null, user.id, 'CREATE_INGREDIENT', 'Warehouse', `User ${user.name} created ingredient: ${newIngredient.name}`);
 ⋮----
-res.status(201).json(ingredient);
+res.status(201).json(newIngredient);
 ⋮----
 console.error('Error creating ingredient:', error);
 res.status(500).json({ message: 'Error creating ingredient' });
@@ -3908,10 +3897,9 @@ app.put('/api/ingredients/:id', async (req, res) => {
 ⋮----
 return res.status(404).json({ message: 'Ingredient not found' });
 ⋮----
-// Log the ingredient update
-await logAction(db, userId, 'UPDATE_INGREDIENT', 'Warehouse', `Updated ingredient #${id}: ${ingredient.name}`);
+await logAction(null, user.id, 'UPDATE_INGREDIENT', 'Warehouse', `User ${user.name} updated ingredient #${id}`);
 ⋮----
-res.json(ingredient);
+res.json(rows[0]);
 ⋮----
 console.error('Error updating ingredient:', error);
 res.status(500).json({ message: 'Error updating ingredient' });

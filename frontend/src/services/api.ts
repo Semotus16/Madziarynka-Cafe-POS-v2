@@ -227,7 +227,7 @@ export const ingredientsAPI = {
   
   update: async (id: number, ingredient: Partial<Ingredient>, user: User): Promise<Ingredient> => {
     try {
-      const response = await api.put(`/api/ingredients/${id}`, { ...ingredient, user_id: user.id });
+      const response = await api.put(`/api/ingredients/${id}`, { ...ingredient, user });
       return response.data;
     } catch (error) {
       throw new Error('Failed to update ingredient');

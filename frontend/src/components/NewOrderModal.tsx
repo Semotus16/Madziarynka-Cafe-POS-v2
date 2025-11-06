@@ -113,10 +113,10 @@ export default function NewOrderModal({
   const products = selectedGroup ? getProductsByGroup(selectedGroup) : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-lg shadow-xl" style={{ width: '1000px', height: '720px' }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 overflow-auto">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[80vh] my-8 flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b">
+        <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0 bg-white">
           <h2>{editingOrder ? `Edycja zamówienia #${editingOrder.id}` : 'Nowe zamówienie'}</h2>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />
@@ -124,9 +124,9 @@ export default function NewOrderModal({
         </div>
 
         {/* Content */}
-        <div className="flex" style={{ height: 'calc(720px - 64px)' }}>
+        <div className="flex flex-1 min-h-0">
           {/* Product area */}
-          <div className="flex-1 p-6 overflow-auto bg-gray-50">
+          <div className="flex-1 p-6 overflow-y-auto bg-gray-50">
             {isLoading ? (
               <div className="flex items-center justify-center h-full">
                 <div className="text-lg">Ładowanie produktów...</div>
@@ -187,62 +187,64 @@ export default function NewOrderModal({
 
           {/* Cart */}
           <div className="w-80 bg-white border-l border-gray-200 flex flex-col">
-            <div className="p-4 border-b border-gray-200">
+            <div className="p-4 border-b border-gray-200 flex-shrink-0">
               <h2>Koszyk</h2>
             </div>
             
-            <ScrollArea className="flex-1 p-4 min-h-0">
-              {cart.length === 0 ? (
-                <p className="text-gray-500 text-center py-8">Koszyk jest pusty</p>
-              ) : (
-                <div className="space-y-3">
-                  {cart.map((item) => (
-                    <Card key={item.id} className="p-3">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1">
-                          <div>{item.name}</div>
-                          <div className="text-gray-600">{parseFloat(item.price.toString()).toFixed(2)} zł</div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => removeFromCart(item.id)}
-                          className="h-8 w-8"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
+            <ScrollArea className="flex-1 overflow-y-auto">
+              <div className="p-4">
+                {cart.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">Koszyk jest pusty</p>
+                ) : (
+                  <div className="space-y-3">
+                    {cart.map((item) => (
+                      <Card key={item.id} className="p-3">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <div>{item.name}</div>
+                            <div className="text-gray-600">{parseFloat(item.price.toString()).toFixed(2)} zł</div>
+                          </div>
                           <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => updateQuantity(item.id, -1)}
-                            className="h-8 w-8 p-0"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeFromCart(item.id)}
+                            className="h-8 w-8"
                           >
-                            -
-                          </Button>
-                          <span className="w-8 text-center">{item.quantity}</span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => updateQuantity(item.id, 1)}
-                            className="h-8 w-8 p-0"
-                          >
-                            +
+                            <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
-                        <div>
-                          {(item.price * item.quantity).toFixed(2)} zł
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => updateQuantity(item.id, -1)}
+                              className="h-8 w-8 p-0"
+                            >
+                              -
+                            </Button>
+                            <span className="w-8 text-center">{item.quantity}</span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => updateQuantity(item.id, 1)}
+                              className="h-8 w-8 p-0"
+                            >
+                              +
+                            </Button>
+                          </div>
+                          <div>
+                            {(item.price * item.quantity).toFixed(2)} zł
+                          </div>
                         </div>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              )}
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
             </ScrollArea>
 
-            <div className="p-4 border-t border-gray-200 space-y-3">
+            <div className="p-4 border-t border-gray-200 space-y-3 flex-shrink-0">
               <div className="flex justify-between">
                 <span>Suma:</span>
                 <span>{getTotalPrice().toFixed(2)} zł</span>
