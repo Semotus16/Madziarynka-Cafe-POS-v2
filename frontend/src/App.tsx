@@ -2,6 +2,8 @@ import { useState } from "react";
 import LoginScreen from "./components/LoginScreen";
 import MainLayout from "./components/MainLayout";
 import { Toaster } from "./components/ui/sonner";
+import { authAPI } from "./services/api";
+import { toast } from "sonner";
 
 export type User = {
   id: string;
@@ -18,8 +20,16 @@ export default function App() {
     setCurrentUser(user);
   };
 
-  const handleLogout = () => {
-    setCurrentUser(null);
+  // ZMIANA: Poprawiona i kompletna logika wylogowania.
+  const handleLogout = async () => {
+    try {
+      await authAPI.logout();
+      toast.success("Wylogowano pomyślnie!");
+    } catch (error) {
+      console.error("Logout failed, clearing session anyway.", error);
+    } finally {
+      setCurrentUser(null);
+    }
   };
 
   if (!currentUser) {

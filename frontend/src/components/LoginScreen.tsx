@@ -6,6 +6,13 @@ import { toast } from 'sonner';
 import { User } from '../App';
 import { authAPI } from '../services/api';
 
+const MOCK_USERS: User[] = [
+  { id: '1', name: 'Admin', role: 'admin' },
+  { id: '2', name: 'Pracownik1', role: 'employee' },
+  { id: '3', name: 'Pracownik2', role: 'employee' },
+  { id: '4', name: 'Pracownik3', role: 'employee' },
+];
+
 type LoginScreenProps = {
   onLogin: (user: User) => void;
 };
@@ -47,6 +54,8 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
       toast.success(`Witaj, ${response.user.name}!`);
       onLogin(response.user);
     } catch (error: any) {
+      // ZMIANA: Lepsze logowanie błędów w konsoli przeglądarki.
+      console.error("Błąd logowania:", error);
       toast.error(error.message || 'Logowanie nie powiodło się');
       setPin('');
     } finally {
@@ -79,7 +88,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                 >
                   <Avatar className="w-16 h-16 mx-auto mb-2">
                     <AvatarFallback className="bg-amber-200 text-amber-800">
-                      {user.name.split(' ').map(n => n[0]).join('')}
+                      {user.name.substring(0, 2)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="text-center">
@@ -117,7 +126,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
                 <Button
                   key={num}
                   onClick={() => handleNumberClick(num)}
-                  disabled={!selectedUser}
+                  disabled={!selectedUser || isLoading}
                   variant="outline"
                   className="h-16 text-xl"
                 >
@@ -126,7 +135,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               ))}
               <Button
                 onClick={handleClear}
-                disabled={!selectedUser}
+                disabled={!selectedUser || isLoading}
                 variant="outline"
                 className="h-16"
               >
@@ -134,7 +143,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               </Button>
               <Button
                 onClick={() => handleNumberClick('0')}
-                disabled={!selectedUser}
+                disabled={!selectedUser || isLoading}
                 variant="outline"
                 className="h-16 text-xl"
               >
@@ -142,15 +151,12 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
               </Button>
               <Button
                 onClick={handleLogin}
-                disabled={!selectedUser || pin.length !== 4}
+                disabled={!selectedUser || pin.length !== 4 || isLoading}
                 className="h-16 bg-amber-600 hover:bg-amber-700"
               >
-                Zaloguj
+                {isLoading ? 'Logowanie...' : 'Zaloguj'}
               </Button>
             </div>
-            <p className="text-sm text-gray-500 text-center">
-              Demo: PIN dla każdego użytkownika to 1234, 5678, 9012, 3456
-            </p>
           </div>
         </div>
       </Card>
