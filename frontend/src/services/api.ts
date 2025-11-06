@@ -132,9 +132,9 @@ export const shiftsAPI = {
       throw new Error('Failed to fetch shifts');
     }
   },
-  create: async (shift: { user_id: number; start_time: string; end_time: string }) => {
+  create: async (shift: { user_id: number; start_time: string; end_time: string }, user: User) => {
     try {
-      const response = await api.post('/api/shifts', shift);
+      const response = await api.post('/api/shifts', { ...shift, user_id: user.id });
       return response.data;
     } catch (error) {
       throw new Error('Failed to create shift');
@@ -163,9 +163,9 @@ export const logsAPI = {
       throw new Error('Failed to fetch logs');
     }
   },
-  create: async (log: { user_id?: number; action: string; module: string; details: string }) => {
+  create: async (log: { user_id?: number; action: string; module: string; details: string }, user: User) => {
     try {
-      const response = await api.post('/api/logs', log);
+      const response = await api.post('/api/logs', { ...log, user_id: user.id });
       return response.data;
     } catch (error) {
       throw new Error('Failed to create log entry');
@@ -185,9 +185,9 @@ export const authAPI = {
     }
   },
 
-  logout: async (): Promise<void> => {
+  logout: async (user: User): Promise<void> => {
     try {
-      await api.post('/auth/logout');
+      await api.post('/auth/logout', { user_id: user.id });
       localStorage.removeItem('authToken');
     } catch (error) {
       localStorage.removeItem('authToken');
@@ -216,27 +216,32 @@ export const ingredientsAPI = {
     }
   },
   
-  create: async (ingredient: Omit<Ingredient, 'id'>): Promise<Ingredient> => {
+  create: async (ingredient: Omit<Ingredient, 'id'>, user: User): Promise<Ingredient> => {
     try {
-      const response = await api.post('/api/ingredients', ingredient);
+      const response = await api.post('/api/ingredients', { ...ingredient, user_id: user.id });
       return response.data;
     } catch (error) {
       throw new Error('Failed to create ingredient');
     }
   },
   
-  update: async (id: number, ingredient: Partial<Ingredient>): Promise<Ingredient> => {
+  update: async (id: number, ingredient: Partial<Ingredient>, user: User): Promise<Ingredient> => {
     try {
-      const response = await api.put(`/api/ingredients/${id}`, ingredient);
+      const response = await api.put(`/api/ingredients/${id}`, { ...ingredient, user_id: user.id });
       return response.data;
     } catch (error) {
       throw new Error('Failed to update ingredient');
     }
   },
   
-  delete: async (id: number): Promise<void> => {
+  deactivate: async (id: number, user: User): Promise<void> => {
+    // Axios wymaga, aby ciało żądania w metodzie DELETE było wewnątrz obiektu `data`
+    await api.delete(`/api/ingredients/${id}`, { data: { user } });
+  },
+  
+  delete: async (id: number, user: User): Promise<void> => {
     try {
-      await api.delete(`/api/ingredients/${id}`);
+      await api.delete(`/api/ingredients/${id}`, { data: { user_id: user.id } });
     } catch (error) {
       throw new Error('Failed to delete ingredient');
     }
@@ -259,9 +264,9 @@ export const productsAPI = {
     price: number;
     group: string;
     ingredients?: { ingredient_id: number; quantity_needed: number }[];
-  }): Promise<Product> => {
+  }, user: User): Promise<Product> => {
     try {
-      const response = await api.post('/api/menu', product);
+      const response = await api.post('/api/menu', { ...product, user_id: user.id });
       return response.data;
     } catch (error) {
       throw new Error('Failed to create menu item');
@@ -273,18 +278,18 @@ export const productsAPI = {
     price: number;
     group: string;
     ingredients?: { ingredient_id: number; quantity_needed: number }[];
-  }): Promise<Product> => {
+  }, user: User): Promise<Product> => {
     try {
-      const response = await api.put(`/api/menu/${id}`, product);
+      const response = await api.put(`/api/menu/${id}`, { ...product, user_id: user.id });
       return response.data;
     } catch (error) {
       throw new Error('Failed to update menu item');
     }
   },
   
-  delete: async (id: number): Promise<void> => {
+  delete: async (id: number, user: User): Promise<void> => {
     try {
-      await api.delete(`/api/menu/${id}`);
+      await api.delete(`/api/menu/${id}`, { data: { user_id: user.id } });
     } catch (error) {
       throw new Error('Failed to delete menu item');
     }
@@ -325,23 +330,17 @@ export const ordersAPI = {
     userId: number;
     items: { id: number; quantity: number; price: number }[];
     total: number;
-  }): Promise<{ id: number; message: string }> => {
+  }, user: User): Promise<{ id: number; message: string }> => {
     try {
-      const response = await api.post('/api/orders', order);
+      const response = await api.post('/api/orders', { ...order, user_id: user.id });
       return response.data;
     } catch (error) {
       throw new Error('Failed to create order');
     }
   },
 
-  complete: async (id: number): Promise<{ message: string }> => {
-    try {
-      const response = await api.post(`/api/orders/${id}/complete`);
-      return response.data;
-    } catch (error: any) {
-      const message = error.response?.data?.message || 'Failed to complete order';
-      throw new Error(message);
-    }
+  complete: async (orderId: number, user: User): Promise<void> => {
+    await api.post(`/api/orders/${orderId}/complete`, { user });
   },
   
 update: async (orderId: number, items: any[], total: number, user: User): Promise<Order> => {
@@ -353,9 +352,9 @@ update: async (orderId: number, items: any[], total: number, user: User): Promis
     }
   },
   
-  delete: async (id: number): Promise<void> => {
+  delete: async (id: number, user: User): Promise<void> => {
     try {
-      await api.delete(`/api/orders/${id}`);
+      await api.delete(`/api/orders/${id}`, { data: { user_id: user.id } });
     } catch (error) {
       throw new Error('Failed to delete order');
     }
@@ -381,9 +380,9 @@ export const newLogsAPI = {
     action: string;
     module: string;
     details: string;
-  }): Promise<Log> => {
+  }, user: User): Promise<Log> => {
     try {
-      const response = await api.post('/api/logs', log);
+      const response = await api.post('/api/logs', { ...log, user_id: user.id });
       return response.data;
     } catch (error) {
       throw new Error('Failed to create log entry');
@@ -432,27 +431,27 @@ export const newScheduleAPI = {
     }
   },
   
-  create: async (schedule: any) => {
+  create: async (schedule: any, user: User) => {
     try {
       // Placeholder implementation
-      return schedule;
+      return { ...schedule, user_id: user.id };
     } catch (error) {
       throw new Error('Failed to create schedule');
     }
   },
   
-  update: async (id: string, schedule: any) => {
+  update: async (id: string, schedule: any, user: User) => {
     try {
       // Placeholder implementation
-      return schedule;
+      return { ...schedule, user_id: user.id, id };
     } catch (error) {
       throw new Error('Failed to update schedule');
     }
   },
   
-  delete: async (id: string) => {
+  delete: async (id: string, user: User) => {
     try {
-      // Placeholder implementation
+      // Placeholder implementation - would need user_id for logging
     } catch (error) {
       throw new Error('Failed to delete schedule');
     }

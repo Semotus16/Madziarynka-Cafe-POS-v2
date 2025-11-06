@@ -116,7 +116,7 @@ export default function MenuTab({ user }: MenuTabProps) {
     }
 
     try {
-      await productsAPI.delete(id);
+      await productsAPI.delete(id, user);
       setMenuItems(menuItems.filter((item) => item.id !== id));
       toast.success('Pozycja menu usunięta');
     } catch (error) {
@@ -198,7 +198,7 @@ export default function MenuTab({ user }: MenuTabProps) {
 
       if (editingItem) {
         // Update existing product
-        const updatedProduct = await productsAPI.update(editingItem.id, productData);
+        const updatedProduct = await productsAPI.update(editingItem.id, productData, user);
         
         // Reload BOM for the updated product
         const productIngredients = await productsAPI.getIngredients(updatedProduct.id);
@@ -211,7 +211,7 @@ export default function MenuTab({ user }: MenuTabProps) {
         toast.success('Pozycja menu zaktualizowana');
       } else {
         // Create new product
-        const newProduct = await productsAPI.create(productData);
+        const newProduct = await productsAPI.create(productData, user);
         
         // Load BOM for the new product
         const productIngredients = await productsAPI.getIngredients(newProduct.id);

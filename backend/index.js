@@ -13,6 +13,23 @@ const getClient = async () => {
   return await db.pool.connect();
 };
 
+// Helper function to log actions
+const logAction = async (transactionClient, userId, action, module, details) => {
+  const client = transactionClient || db; // Use transaction client if available, otherwise use the general pool
+  if (!userId) {
+    console.error('LogAction Error: No userId provided for action:', action);
+    return;
+  }
+  try {
+    await client.query(
+      'INSERT INTO logs (user_id, action, module, details) VALUES ($1, $2, $3, $4)',
+      [userId, action, module, details]
+    );
+  } catch (error) {
+    console.error(`Failed to log action [${action}]:`, error);
+  }
+};
+
 // === AUTHENTICATION ===
 // ZMIEŃ: Pobierz użytkowników z bazy, a nie z MOCK_USERS
 app.get('/api/users', async (req, res) => {
@@ -36,6 +53,10 @@ app.post('/auth/login', async (req, res) => {
     }
     const token = `mock-jwt-for-${user.id}`;
     const { pin: _, ...userToReturn } = user;
+    
+    // Log the login action
+    await logAction(db, user.id, 'USER_LOGIN', 'Auth', 'User logged in');
+    
     res.json({ user: userToReturn, token });
   } catch (error) {
     console.error('Login error:', error);
@@ -77,13 +98,17 @@ app.get('/api/ingredients', async (req, res) => {
 
 // POST /api/ingredients - Stwórz nowy składnik
 app.post('/api/ingredients', async (req, res) => {
+  const { name, stock_quantity, unit, nominal_stock, user } = req.body;
   try {
-    const { name, unit, stock_quantity, nominal_stock } = req.body;
     const { rows } = await db.query(
-      'INSERT INTO ingredients (name, unit, stock_quantity, nominal_stock) VALUES ($1, $2, $3, $4) RETURNING id, name, unit, stock_quantity, nominal_stock, is_active, created_at',
-      [name, unit, stock_quantity || 0, nominal_stock || 0]
+      'INSERT INTO ingredients (name, stock_quantity, unit, nominal_stock) VALUES ($1, $2, $3, $4) RETURNING *',
+      [name, stock_quantity, unit, nominal_stock]
     );
-    res.status(201).json(rows[0]);
+    const newIngredient = rows[0];
+    if (user && user.id) {
+      await logAction(null, user.id, 'CREATE_INGREDIENT', 'Warehouse', `User ${user.name} created ingredient: ${newIngredient.name}`);
+    }
+    res.status(201).json(newIngredient);
   } catch (error) {
     console.error('Error creating ingredient:', error);
     res.status(500).json({ message: 'Error creating ingredient' });
@@ -92,15 +117,18 @@ app.post('/api/ingredients', async (req, res) => {
 
 // PUT /api/ingredients/:id - Zaktualizuj składnik (szczególnie stock_quantity)
 app.put('/api/ingredients/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, stock_quantity, unit, is_active, nominal_stock, user } = req.body;
   try {
-    const { id } = req.params;
-    const { name, unit, stock_quantity, nominal_stock, is_active } = req.body;
     const { rows } = await db.query(
-      'UPDATE ingredients SET name = $1, unit = $2, stock_quantity = $3, nominal_stock = $4, is_active = $5 WHERE id = $6 RETURNING id, name, unit, stock_quantity, nominal_stock, is_active, created_at',
-      [name, unit, stock_quantity, nominal_stock, is_active, id]
+      'UPDATE ingredients SET name = $1, stock_quantity = $2, unit = $3, is_active = $4, nominal_stock = $5 WHERE id = $6 RETURNING *',
+      [name, stock_quantity, unit, is_active, nominal_stock, id]
     );
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Ingredient not found' });
+    }
+    if (user && user.id) {
+      await logAction(null, user.id, 'UPDATE_INGREDIENT', 'Warehouse', `User ${user.name} updated ingredient #${id}`);
     }
     res.json(rows[0]);
   } catch (error) {
@@ -113,6 +141,7 @@ app.put('/api/ingredients/:id', async (req, res) => {
 app.delete('/api/ingredients/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const { userId } = req.body;
     const { rows } = await db.query(
       'UPDATE ingredients SET is_active = false WHERE id = $1 RETURNING id, name, unit, stock_quantity, nominal_stock, is_active, created_at',
       [id]
@@ -120,7 +149,12 @@ app.delete('/api/ingredients/:id', async (req, res) => {
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Ingredient not found' });
     }
-    res.json({ message: 'Ingredient deactivated successfully', ingredient: rows[0] });
+    const ingredient = rows[0];
+    
+    // Log the ingredient deactivation
+    await logAction(db, userId, 'DEACTIVATE_INGREDIENT', 'Warehouse', `Deactivated ingredient #${id}: ${ingredient.name}`);
+    
+    res.json({ message: 'Ingredient deactivated successfully', ingredient });
   } catch (error) {
     console.error('Error deactivating ingredient:', error);
     res.status(500).json({ message: 'Error deactivating ingredient' });
@@ -142,7 +176,7 @@ app.get('/api/menu', async (req, res) => {
 // POST /api/menu - Stwórz nowy produkt
 app.post('/api/menu', async (req, res) => {
   try {
-    const { name, price, group, ingredients } = req.body;
+    const { userId, name, price, group, ingredients } = req.body;
     const client = await getClient();
     try {
       await client.query('BEGIN');
@@ -162,6 +196,9 @@ app.post('/api/menu', async (req, res) => {
         }
       }
       
+      // Log the product creation
+      await logAction(client, userId, 'CREATE_PRODUCT', 'Menu', `Created product: ${product.name}`);
+      
       await client.query('COMMIT');
       res.status(201).json(product);
     } catch (e) {
@@ -180,7 +217,7 @@ app.post('/api/menu', async (req, res) => {
 app.put('/api/menu/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, price, group, ingredients } = req.body;
+    const { userId, name, price, group, ingredients } = req.body;
     const client = await getClient();
     try {
       await client.query('BEGIN');
@@ -209,6 +246,9 @@ app.put('/api/menu/:id', async (req, res) => {
         }
       }
       
+      // Log the product update
+      await logAction(client, userId, 'UPDATE_PRODUCT', 'Menu', `Updated product #${id}: ${name}`);
+      
       await client.query('COMMIT');
       res.json(productRows[0]);
     } catch (e) {
@@ -227,6 +267,7 @@ app.put('/api/menu/:id', async (req, res) => {
 app.delete('/api/menu/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const { userId } = req.body;
     const { rows } = await db.query(
       'UPDATE products SET is_visible = false WHERE id = $1 RETURNING *',
       [id]
@@ -234,6 +275,11 @@ app.delete('/api/menu/:id', async (req, res) => {
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Product not found' });
     }
+    const product = rows[0];
+    
+    // Log the product deactivation
+    await logAction(db, userId, 'DEACTIVATE_PRODUCT', 'Menu', `Deactivated product #${id}: ${product.name}`);
+    
     res.json({ message: 'Product deactivated successfully' });
   } catch (error) {
     console.error('Error deactivating product:', error);
@@ -302,6 +348,9 @@ app.post('/api/orders', async (req, res) => {
         );
       }
       
+      // Log the order creation
+      await logAction(client, userId, 'CREATE_ORDER', 'Orders', `Created order #${orderId}`);
+      
       await client.query('COMMIT');
       res.status(201).json({ id: orderId, message: 'Order created' });
     } catch (e) {
@@ -320,6 +369,7 @@ app.post('/api/orders', async (req, res) => {
 app.post('/api/orders/:id/complete', async (req, res) => {
   try {
     const { id } = req.params;
+    const { userId } = req.body;
     const client = await getClient();
     try {
       await client.query('BEGIN');
@@ -358,6 +408,10 @@ app.post('/api/orders/:id/complete', async (req, res) => {
       
       // 4. Zmień status zamówienia na 'completed'
       await client.query('UPDATE orders SET status = $1 WHERE id = $2', ['completed', id]);
+      
+      // Log the order completion
+      await logAction(client, userId, 'COMPLETE_ORDER', 'Orders', `Completed order #${id}`);
+      
       await client.query('COMMIT');
       
       res.status(200).json({ message: 'Order completed and stock updated successfully' });
@@ -397,12 +451,9 @@ app.put('/api/orders/:id', async (req, res) => {
       );
     }
     
-    // Opcjonalnie: dodaj log o edycji zamówienia
+    // Log the order update using the new logAction function
     if (user && user.id) {
-       await client.query(
-        'INSERT INTO logs (user_id, action, module, details) VALUES ($1, $2, $3, $4)',
-        [user.id, 'UPDATE_ORDER', 'Orders', `User ${user.name} updated order #${id}`]
-      );
+      await logAction(client, user.id, 'UPDATE_ORDER', 'Orders', `Updated order #${id}`);
     }
 
     await client.query('COMMIT');

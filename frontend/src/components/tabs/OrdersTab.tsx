@@ -112,7 +112,7 @@ export default function OrdersTab({ user }: OrdersTabProps) {
           })),
           total: total
         };
-        const createdOrder = await ordersAPI.create(orderData);
+        const createdOrder = await ordersAPI.create(orderData, user);
         toast.success(`Zamówienie #${createdOrder.id} zostało złożone!`);
       }
       handleCloseNewOrder();
@@ -125,7 +125,7 @@ export default function OrdersTab({ user }: OrdersTabProps) {
 
   const handleCompleteOrder = async (orderId: number) => {
     try {
-      await ordersAPI.complete(orderId);
+      await ordersAPI.complete(orderId, user);
       
       // Remove completed order from list
       setOrders(orders.filter(order => order.id !== orderId));

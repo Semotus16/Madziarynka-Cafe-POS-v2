@@ -191,7 +191,7 @@ export default function NewOrderModal({
               <h2>Koszyk</h2>
             </div>
             
-            <ScrollArea className="flex-1 p-4">
+            <ScrollArea className="flex-1 p-4 min-h-0">
               {cart.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">Koszyk jest pusty</p>
               ) : (

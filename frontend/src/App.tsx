@@ -16,8 +16,10 @@ export default function App() {
 
   // ZMIANA: Poprawiona i kompletna logika wylogowania.
   const handleLogout = async () => {
+    if (!currentUser) return;
+    
     try {
-      await authAPI.logout();
+      await authAPI.logout(currentUser);
       toast.success("Wylogowano pomyślnie!");
     } catch (error) {
       console.error("Logout failed, clearing session anyway.", error);
