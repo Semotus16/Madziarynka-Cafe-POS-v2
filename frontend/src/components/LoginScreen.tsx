@@ -1,16 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { toast } from 'sonner';
-import { User } from '../App';
-import { authAPI } from '../services/api';
+import { User, authAPI, usersAPI } from '../services/api';
 
 const MOCK_USERS: User[] = [
-  { id: '1', name: 'Admin', role: 'admin' },
-  { id: '2', name: 'Pracownik1', role: 'employee' },
-  { id: '3', name: 'Pracownik2', role: 'employee' },
-  { id: '4', name: 'Pracownik3', role: 'employee' },
+  { id: 1, name: 'Admin', role: 'admin' },
+  { id: 2, name: 'Pracownik1', role: 'employee' },
+  { id: 3, name: 'Pracownik2', role: 'employee' },
+  { id: 4, name: 'Pracownik3', role: 'employee' },
 ];
 
 type LoginScreenProps = {
@@ -18,9 +17,25 @@ type LoginScreenProps = {
 };
 
 export default function LoginScreen({ onLogin }: LoginScreenProps) {
+  const [users, setUsers] = useState<User[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [pin, setPin] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Load users from API on component mount
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const usersData = await usersAPI.getAll();
+        setUsers(usersData);
+      } catch (error) {
+        console.error('Failed to load users:', error);
+        // Fallback to mock data if API fails
+        setUsers(MOCK_USERS);
+      }
+    };
+    loadUsers();
+  }, []);
 
   const handleNumberClick = (num: string) => {
     if (pin.length < 4 && !isLoading) {
@@ -46,7 +61,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
     setIsLoading(true);
     try {
       const response = await authAPI.login({
-        userId: selectedUser.id,
+        userId: selectedUser.id.toString(),
         pin: pin
       });
       
@@ -76,7 +91,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           <div>
             <h2 className="mb-4 text-gray-700">Wybierz użytkownika</h2>
             <div className="grid grid-cols-2 gap-3">
-              {MOCK_USERS.map((user) => (
+              {users.map((user) => (
                 <button
                   key={user.id}
                   onClick={() => setSelectedUser(user)}

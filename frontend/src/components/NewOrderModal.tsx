@@ -1,55 +1,41 @@
+import { useState, useEffect } from 'react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { ScrollArea } from './ui/scroll-area';
 import { Coffee, Croissant, IceCream, Wine, Trash2, X } from 'lucide-react';
+import { productsAPI, Product, Order, OrderItem } from '../services/api';
 
-type Product = {
-  id: string;
-  name: string;
-  price: number;
-  group: string;
-};
-
-type CartItem = Product & {
+type ProductWithQuantity = Product & {
   quantity: number;
 };
 
-const PRODUCT_GROUPS = [
-  { id: 'coffee', name: 'Kawa', icon: Coffee, color: 'bg-amber-100' },
-  { id: 'pastries', name: 'Wypieki', icon: Croissant, color: 'bg-orange-100' },
-  { id: 'desserts', name: 'Desery', icon: IceCream, color: 'bg-pink-100' },
-  { id: 'drinks', name: 'Napoje', icon: Wine, color: 'bg-blue-100' },
-];
+type OrderWithItems = Order & {
+  items: OrderItem[];
+};
 
-const MOCK_PRODUCTS: Product[] = [
-  // Coffee
-  { id: '1', name: 'Espresso', price: 8.0, group: 'coffee' },
-  { id: '2', name: 'Cappuccino', price: 12.0, group: 'coffee' },
-  { id: '3', name: 'Latte', price: 14.0, group: 'coffee' },
-  { id: '4', name: 'Americano', price: 10.0, group: 'coffee' },
-  // Pastries
-  { id: '5', name: 'Croissant', price: 6.0, group: 'pastries' },
-  { id: '6', name: 'Pączek', price: 5.0, group: 'pastries' },
-  { id: '7', name: 'Drożdżówka', price: 4.5, group: 'pastries' },
-  { id: '8', name: 'Ciastko', price: 7.0, group: 'pastries' },
-  // Desserts
-  { id: '9', name: 'Sernik', price: 15.0, group: 'desserts' },
-  { id: '10', name: 'Tiramisu', price: 18.0, group: 'desserts' },
-  { id: '11', name: 'Lody', price: 12.0, group: 'desserts' },
-  // Drinks
-  { id: '12', name: 'Herbata', price: 8.0, group: 'drinks' },
-  { id: '13', name: 'Sok pomarańczowy', price: 10.0, group: 'drinks' },
-  { id: '14', name: 'Woda', price: 5.0, group: 'drinks' },
+type ProductGroup = {
+  id: string;
+  name: string;
+  icon: any;
+  color: string;
+};
+
+const PRODUCT_GROUPS: ProductGroup[] = [
+  { id: 'Kawa', name: 'Kawa', icon: Coffee, color: 'bg-amber-100' },
+  { id: 'Wypieki', name: 'Wypieki', icon: Croissant, color: 'bg-orange-100' },
+  { id: 'Desery', name: 'Desery', icon: IceCream, color: 'bg-pink-100' },
+  { id: 'Napoje', name: 'Napoje', icon: Wine, color: 'bg-blue-100' },
 ];
 
 type NewOrderModalProps = {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (items: CartItem[], total: number) => void;
+  onSubmit: (items: ProductWithQuantity[], total: number) => void;
   selectedGroup: string | null;
   setSelectedGroup: (group: string | null) => void;
-  cart: CartItem[];
-  setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
+  cart: ProductWithQuantity[];
+  setCart: React.Dispatch<React.SetStateAction<ProductWithQuantity[]>>;
+  editingOrder?: OrderWithItems | null;
 };
 
 export default function NewOrderModal({
@@ -60,7 +46,28 @@ export default function NewOrderModal({
   setSelectedGroup,
   cart,
   setCart,
+  editingOrder,
 }: NewOrderModalProps) {
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (isOpen) {
+      const loadProducts = async () => {
+        try {
+          setIsLoading(true);
+          const productsData = await productsAPI.getAll();
+          setAllProducts(productsData.filter(p => p.is_visible));
+        } catch (error) {
+          console.error('Failed to load products:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      loadProducts();
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const addToCart = (product: Product) => {
@@ -75,11 +82,11 @@ export default function NewOrderModal({
     });
   };
 
-  const removeFromCart = (productId: string) => {
+  const removeFromCart = (productId: number) => {
     setCart((prev) => prev.filter((item) => item.id !== productId));
   };
 
-  const updateQuantity = (productId: string, delta: number) => {
+  const updateQuantity = (productId: number, delta: number) => {
     setCart((prev) =>
       prev
         .map((item) =>
@@ -99,16 +106,18 @@ export default function NewOrderModal({
     onSubmit(cart, getTotalPrice());
   };
 
-  const products = selectedGroup
-    ? MOCK_PRODUCTS.filter((p) => p.group === selectedGroup)
-    : [];
+  const getProductsByGroup = (groupName: string) => {
+    return allProducts.filter((p) => p.group === groupName);
+  };
+
+  const products = selectedGroup ? getProductsByGroup(selectedGroup) : [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white rounded-lg shadow-xl" style={{ width: '1000px', height: '720px' }}>
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b">
-          <h2>Nowe zamówienie</h2>
+          <h2>{editingOrder ? `Edycja zamówienia #${editingOrder.id}` : 'Nowe zamówienie'}</h2>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="w-5 h-5" />
           </Button>
@@ -118,7 +127,11 @@ export default function NewOrderModal({
         <div className="flex" style={{ height: 'calc(720px - 64px)' }}>
           {/* Product area */}
           <div className="flex-1 p-6 overflow-auto bg-gray-50">
-            {!selectedGroup ? (
+            {isLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-lg">Ładowanie produktów...</div>
+              </div>
+            ) : !selectedGroup ? (
               <>
                 <h2 className="mb-6">Wybierz kategorię</h2>
                 <div className="grid grid-cols-4 gap-3">
@@ -150,18 +163,24 @@ export default function NewOrderModal({
                     Powrót do kategorii
                   </Button>
                 </div>
-                <div className="grid grid-cols-3 gap-4">
-                  {products.map((product) => (
-                    <Card
-                      key={product.id}
-                      className="p-6 cursor-pointer hover:shadow-lg transition-shadow border-2 border-transparent hover:border-amber-500"
-                      onClick={() => addToCart(product)}
-                    >
-                      <h3 className="mb-2">{product.name}</h3>
-                      <p className="text-amber-700">{product.price.toFixed(2)} zł</p>
-                    </Card>
-                  ))}
-                </div>
+                {products.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    Brak produktów w tej kategorii
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-4">
+                    {products.map((product) => (
+                      <Card
+                        key={product.id}
+                        className="p-6 cursor-pointer hover:shadow-lg transition-shadow border-2 border-transparent hover:border-amber-500"
+                        onClick={() => addToCart(product)}
+                      >
+                        <h3 className="mb-2">{product.name}</h3>
+                        <p className="text-amber-700">{parseFloat(product.price.toString()).toFixed(2)} zł</p>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -182,7 +201,7 @@ export default function NewOrderModal({
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
                           <div>{item.name}</div>
-                          <div className="text-gray-600">{item.price.toFixed(2)} zł</div>
+                          <div className="text-gray-600">{parseFloat(item.price.toString()).toFixed(2)} zł</div>
                         </div>
                         <Button
                           variant="ghost"

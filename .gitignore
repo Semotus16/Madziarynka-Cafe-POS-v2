@@ -1,5 +1,5 @@
-# Created by https://www.toptal.com/developers/gitignore/api/node,react,visualstudiocode,windows
-# Edit at https://www.toptal.com/developers/gitignore?templates=node,react,visualstudiocode,windows
+# Created by https://www.toptal.com/developers/gitignore/api/node,react,visualstudiocode,windows,docker
+# Edit at https://www.toptal.com/developers/gitignore?templates=node,react,visualstudiocode,windows,docker
 
 ### Node ###
 # Logs
@@ -199,4 +199,102 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# End of https://www.toptal.com/developers/gitignore/api/node,react,visualstudiocode,windows
+### Docker ###
+# Compiled Docker Compose files
+docker-compose.override.yml
+docker-compose.local.yml
+
+# Docker volumes
+docker-volumes/
+postgres-data/
+
+# Docker build context
+.docker/context/
+.docker/tmp/
+
+# Custom Docker configurations
+docker/tmp/
+
+### Project-specific ignores ###
+# Frontend build output
+frontend/build/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+
+# Backend build output
+backend/dist/
+backend/build/
+
+# Database files and migrations
+*.db
+*.sqlite
+*.sqlite3
+database/
+postgres-data/
+
+# IDE and editor files
+*.swp
+*.swo
+*~
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Package manager files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Test coverage and reports
+coverage/
+.nyc_output/
+.jest/
+test-results/
+*.lcov
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+temp/
+logs/
+*.pid
+*.seed
+*.pid.lock
+
+# Backup files
+*.bak
+*.backup
+*.orig
+
+# Figma specific (if any temporary files)
+figma/node_modules/
+figma/dist/
+figma/.vite/
+
+# Custom application files
+uploads/
+public/uploads/
+storage/
+*.log
+debug.log
+
+# Environment and secrets
+.env.local
+.env.production
+.env.staging
+secrets.json
+config/secrets.json
+
+# End of https://www.toptal.com/developers/gitignore/api/node,react,visualstudiocode,windows,docker

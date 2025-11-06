@@ -2,14 +2,8 @@ import { useState } from "react";
 import LoginScreen from "./components/LoginScreen";
 import MainLayout from "./components/MainLayout";
 import { Toaster } from "./components/ui/sonner";
-import { authAPI } from "./services/api";
+import { authAPI, User } from "./services/api";
 import { toast } from "sonner";
-
-export type User = {
-  id: string;
-  name: string;
-  role: "admin" | "employee";
-};
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(

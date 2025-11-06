@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_BASE_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -36,10 +36,11 @@ api.interceptors.response.use(
 );
 
 export interface User {
-  id: string;
+  id: number;
   name: string;
   role: "admin" | "employee";
-  email?: string;
+  pin?: string; // Only present in login response
+  is_active?: boolean;
 }
 
 export interface LoginRequest {
@@ -57,7 +58,122 @@ export interface ApiError {
   code?: string;
 }
 
-// Authentication API
+export interface Ingredient {
+  id: number;
+  name: string;
+  unit: string;
+  stock_quantity: number;
+  nominal_stock: number;
+  is_active: boolean;
+}
+
+export interface Product {
+  id: number;
+  name: string;
+  price: number;
+  group: string;
+  is_visible: boolean;
+}
+
+export interface ProductIngredient {
+  ingredient_id: number;
+  quantity_needed: number;
+  ingredient_name?: string;
+  unit?: string;
+}
+
+export interface OrderItem {
+  id: number;
+  order_id: number;
+  product_id: number;
+  quantity: number;
+  price_per_item: number;
+  product_name?: string;
+}
+
+export interface Order {
+  id: number;
+  user_id: number;
+  status: 'open' | 'completed' | 'cancelled';
+  total_price: number;
+  created_at: string;
+  items?: OrderItem[];
+}
+
+export interface Log {
+  id: number;
+  user_id: number;
+  action: string;
+  module: string;
+  details: string;
+  created_at: string;
+  user_name?: string;
+}
+
+// === USERS API ===
+export const usersAPI = {
+  getAll: async (): Promise<User[]> => {
+    try {
+      const response = await api.get('/api/users');
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to fetch users');
+    }
+  },
+};
+
+export const shiftsAPI = {
+  getAll: async (date?: string) => {
+    try {
+      const query = date ? `?date=${date}` : '';
+      const response = await api.get(`/api/shifts${query}`);
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to fetch shifts');
+    }
+  },
+  create: async (shift: { user_id: number; start_time: string; end_time: string }) => {
+    try {
+      const response = await api.post('/api/shifts', shift);
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to create shift');
+    }
+  },
+};
+
+// === REPORTS API ===
+export const reportsAPI = {
+  getDaily: async (date: string) => {
+    try {
+      const response = await api.get(`/api/reports/daily?date=${date}`);
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to fetch daily report');
+    }
+  },
+};
+
+export const logsAPI = {
+  getAll: async (limit: number = 100, offset: number = 0) => {
+    try {
+      const response = await api.get(`/api/logs?limit=${limit}&offset=${offset}`);
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to fetch logs');
+    }
+  },
+  create: async (log: { user_id?: number; action: string; module: string; details: string }) => {
+    try {
+      const response = await api.post('/api/logs', log);
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to create log entry');
+    }
+  },
+};
+
+// === AUTHENTICATION API ===
 export const authAPI = {
   login: async (credentials: LoginRequest): Promise<LoginResponse> => {
     try {
@@ -89,126 +205,185 @@ export const authAPI = {
   },
 };
 
-// Menu API
-export const menuAPI = {
-  getAll: async () => {
+// === INGREDIENTS API (WAREHOUSE) ===
+export const ingredientsAPI = {
+  getAll: async (): Promise<Ingredient[]> => {
     try {
-      const response = await api.get('/menu');
+      const response = await api.get('/api/ingredients');
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to fetch ingredients');
+    }
+  },
+  
+  create: async (ingredient: Omit<Ingredient, 'id'>): Promise<Ingredient> => {
+    try {
+      const response = await api.post('/api/ingredients', ingredient);
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to create ingredient');
+    }
+  },
+  
+  update: async (id: number, ingredient: Partial<Ingredient>): Promise<Ingredient> => {
+    try {
+      const response = await api.put(`/api/ingredients/${id}`, ingredient);
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to update ingredient');
+    }
+  },
+  
+  delete: async (id: number): Promise<void> => {
+    try {
+      await api.delete(`/api/ingredients/${id}`);
+    } catch (error) {
+      throw new Error('Failed to delete ingredient');
+    }
+  },
+};
+
+// === PRODUCTS API (MENU) ===
+export const productsAPI = {
+  getAll: async (): Promise<Product[]> => {
+    try {
+      const response = await api.get('/api/menu');
       return response.data;
     } catch (error) {
       throw new Error('Failed to fetch menu items');
     }
   },
   
-  create: async (item: any) => {
+  create: async (product: {
+    name: string;
+    price: number;
+    group: string;
+    ingredients?: { ingredient_id: number; quantity_needed: number }[];
+  }): Promise<Product> => {
     try {
-      const response = await api.post('/menu', item);
+      const response = await api.post('/api/menu', product);
       return response.data;
     } catch (error) {
       throw new Error('Failed to create menu item');
     }
   },
   
-  update: async (id: string, item: any) => {
+  update: async (id: number, product: {
+    name: string;
+    price: number;
+    group: string;
+    ingredients?: { ingredient_id: number; quantity_needed: number }[];
+  }): Promise<Product> => {
     try {
-      const response = await api.put(`/menu/${id}`, item);
+      const response = await api.put(`/api/menu/${id}`, product);
       return response.data;
     } catch (error) {
       throw new Error('Failed to update menu item');
     }
   },
   
-  delete: async (id: string) => {
+  delete: async (id: number): Promise<void> => {
     try {
-      await api.delete(`/menu/${id}`);
+      await api.delete(`/api/menu/${id}`);
     } catch (error) {
       throw new Error('Failed to delete menu item');
     }
   },
+
+  getIngredients: async (productId: number): Promise<ProductIngredient[]> => {
+    try {
+      const response = await api.get(`/api/menu/${productId}/ingredients`);
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to fetch product ingredients');
+    }
+  },
 };
 
-// Orders API
+// === ORDERS API ===
 export const ordersAPI = {
-  getAll: async () => {
+  getAll: async (status?: string): Promise<Order[]> => {
     try {
-      const response = await api.get('/orders');
+      const url = status ? `/api/orders?status=${status}` : '/api/orders';
+      const response = await api.get(url);
       return response.data;
     } catch (error) {
       throw new Error('Failed to fetch orders');
     }
   },
-  
-  create: async (order: any) => {
+
+  getById: async (id: number): Promise<Order> => {
     try {
-      const response = await api.post('/orders', order);
+      const response = await api.get(`/api/orders/${id}`);
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to fetch order');
+    }
+  },
+  
+  create: async (order: {
+    userId: number;
+    items: { id: number; quantity: number; price: number }[];
+    total: number;
+  }): Promise<{ id: number; message: string }> => {
+    try {
+      const response = await api.post('/api/orders', order);
       return response.data;
     } catch (error) {
       throw new Error('Failed to create order');
     }
   },
-  
-  update: async (id: string, order: any) => {
+
+  complete: async (id: number): Promise<{ message: string }> => {
     try {
-      const response = await api.put(`/orders/${id}`, order);
+      const response = await api.post(`/api/orders/${id}/complete`);
       return response.data;
+    } catch (error: any) {
+      const message = error.response?.data?.message || 'Failed to complete order';
+      throw new Error(message);
+    }
+  },
+  
+update: async (orderId: number, items: any[], total: number, user: User): Promise<Order> => {
+    try {
+      const { data } = await api.put(`/api/orders/${orderId}`, { items, total_price: total, user });
+      return data;
     } catch (error) {
       throw new Error('Failed to update order');
     }
   },
   
-  delete: async (id: string) => {
+  delete: async (id: number): Promise<void> => {
     try {
-      await api.delete(`/orders/${id}`);
+      await api.delete(`/api/orders/${id}`);
     } catch (error) {
       throw new Error('Failed to delete order');
     }
   },
 };
 
-// Reports API
-export const reportsAPI = {
-  getDailyReport: async (date: string) => {
+// === LOGS API ===
+export const newLogsAPI = {
+  getAll: async (limit?: number, offset?: number): Promise<Log[]> => {
     try {
-      const response = await api.get(`/reports/daily?date=${date}`);
-      return response.data;
-    } catch (error) {
-      throw new Error('Failed to fetch daily report');
-    }
-  },
-  
-  getWeeklyReport: async (weekStart: string) => {
-    try {
-      const response = await api.get(`/reports/weekly?weekStart=${weekStart}`);
-      return response.data;
-    } catch (error) {
-      throw new Error('Failed to fetch weekly report');
-    }
-  },
-  
-  getMonthlyReport: async (month: string) => {
-    try {
-      const response = await api.get(`/reports/monthly?month=${month}`);
-      return response.data;
-    } catch (error) {
-      throw new Error('Failed to fetch monthly report');
-    }
-  },
-};
-
-// Logs API
-export const logsAPI = {
-  getAll: async () => {
-    try {
-      const response = await api.get('/logs');
+      const params = new URLSearchParams();
+      if (limit) params.append('limit', limit.toString());
+      if (offset) params.append('offset', offset.toString());
+      const response = await api.get(`/api/logs?${params.toString()}`);
       return response.data;
     } catch (error) {
       throw new Error('Failed to fetch logs');
     }
   },
   
-  create: async (log: any) => {
+  create: async (log: {
+    user_id?: number;
+    action: string;
+    module: string;
+    details: string;
+  }): Promise<Log> => {
     try {
-      const response = await api.post('/logs', log);
+      const response = await api.post('/api/logs', log);
       return response.data;
     } catch (error) {
       throw new Error('Failed to create log entry');
@@ -216,50 +391,42 @@ export const logsAPI = {
   },
 };
 
-// Warehouse API
-export const warehouseAPI = {
-  getAll: async () => {
+// === REPORTS API (placeholder - can be implemented later) ===
+export const newReportsAPI = {
+  getDailyReport: async (date: string) => {
     try {
-      const response = await api.get('/warehouse');
-      return response.data;
+      // Placeholder implementation
+      return { message: 'Daily reports not yet implemented' };
     } catch (error) {
-      throw new Error('Failed to fetch warehouse items');
+      throw new Error('Failed to fetch daily report');
     }
   },
   
-  create: async (item: any) => {
+  getWeeklyReport: async (weekStart: string) => {
     try {
-      const response = await api.post('/warehouse', item);
-      return response.data;
+      // Placeholder implementation
+      return { message: 'Weekly reports not yet implemented' };
     } catch (error) {
-      throw new Error('Failed to create warehouse item');
+      throw new Error('Failed to fetch weekly report');
     }
   },
   
-  update: async (id: string, item: any) => {
+  getMonthlyReport: async (month: string) => {
     try {
-      const response = await api.put(`/warehouse/${id}`, item);
-      return response.data;
+      // Placeholder implementation
+      return { message: 'Monthly reports not yet implemented' };
     } catch (error) {
-      throw new Error('Failed to update warehouse item');
-    }
-  },
-  
-  delete: async (id: string) => {
-    try {
-      await api.delete(`/warehouse/${id}`);
-    } catch (error) {
-      throw new Error('Failed to delete warehouse item');
+      throw new Error('Failed to fetch monthly report');
     }
   },
 };
 
-// Schedule API
-export const scheduleAPI = {
+// === SCHEDULE API (placeholder - can be implemented later) ===
+export const newScheduleAPI = {
   getAll: async () => {
     try {
-      const response = await api.get('/schedule');
-      return response.data;
+      // Placeholder implementation
+      return [];
     } catch (error) {
       throw new Error('Failed to fetch schedule');
     }
@@ -267,8 +434,8 @@ export const scheduleAPI = {
   
   create: async (schedule: any) => {
     try {
-      const response = await api.post('/schedule', schedule);
-      return response.data;
+      // Placeholder implementation
+      return schedule;
     } catch (error) {
       throw new Error('Failed to create schedule');
     }
@@ -276,8 +443,8 @@ export const scheduleAPI = {
   
   update: async (id: string, schedule: any) => {
     try {
-      const response = await api.put(`/schedule/${id}`, schedule);
-      return response.data;
+      // Placeholder implementation
+      return schedule;
     } catch (error) {
       throw new Error('Failed to update schedule');
     }
@@ -285,11 +452,19 @@ export const scheduleAPI = {
   
   delete: async (id: string) => {
     try {
-      await api.delete(`/schedule/${id}`);
+      // Placeholder implementation
     } catch (error) {
       throw new Error('Failed to delete schedule');
     }
   },
 };
+
+// === LEGACY COMPATIBILITY ===
+// Backward compatibility with old API structure
+export const menuAPI = productsAPI;
+export const warehouseAPI = ingredientsAPI;
+// export const logsAPI = newLogsAPI; // Remove duplicate
+// export const reportsAPI = newReportsAPI; // Remove duplicate
+export const scheduleAPI = newScheduleAPI;
 
 export default api;

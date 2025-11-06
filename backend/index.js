@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const db = require('./db'); // Importuj połączenie z bazą
 
 const app = express();
 const port = 3001;
@@ -7,54 +8,38 @@ const port = 3001;
 app.use(cors());
 app.use(express.json());
 
-app.get('/', (req, res) => {
-  res.send('Serwer Madziarynki wstał!');
-});
-
-// Mock users database
-const MOCK_USERS = [
-  { id: '1', name: 'Admin', role: 'admin' },
-  { id: '2', name: 'Pracownik1', role: 'employee' },
-  { id: '3', name: 'Pracownik2', role: 'employee' },
-  { id: '4', name: 'Pracownik3', role: 'employee' },
-];
-
-// Mock PIN codes for demo
-const USER_PINS = {
-  '1': '1234',
-  '2': '1234',
-  '3': '1234',
-  '4': '1234',
+// Helper function to get database client with transaction support
+const getClient = async () => {
+  return await db.pool.connect();
 };
 
-// Frontend-compatible login endpoint
+// === AUTHENTICATION ===
+// ZMIEŃ: Pobierz użytkowników z bazy, a nie z MOCK_USERS
+app.get('/api/users', async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id, name, role FROM users WHERE is_active = true');
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ message: 'Error fetching users' });
+  }
+});
+
+// ZMIEŃ: Weryfikuj PIN z bazą danych
 app.post('/auth/login', async (req, res) => {
   try {
-    console.log('Login attempt received. Request body:', req.body);
     const { userId, pin } = req.body;
-    
-    if (!userId || !pin) {
-      return res.status(400).json({ message: 'userId and pin are required' });
+    const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = rows[0];
+    if (!user || user.pin !== pin) { // W produkcji użyj bcrypt.compare!
+      return res.status(401).json({ message: 'Nieprawidłowy użytkownik lub PIN' });
     }
-    
-    const user = MOCK_USERS.find(u => u.id === userId);
-    if (!user) {
-      return res.status(401).json({ message: 'Nieprawidłowy użytkownik' });
-    }
-    
-    if (USER_PINS[userId] !== pin) {
-      return res.status(401).json({ message: 'Nieprawidłowy PIN' });
-    }
-    
-    const token = `mock-jwt-token-${userId}-${Date.now()}`;
-    
-    res.status(200).json({
-      user: user,
-      token: token
-    });
+    const token = `mock-jwt-for-${user.id}`;
+    const { pin: _, ...userToReturn } = user;
+    res.json({ user: userToReturn, token });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ message: 'Błąd serwera' });
+    res.status(500).json({ message: 'Error during login' });
   }
 });
 
@@ -63,6 +48,7 @@ app.post('/auth/logout', async (req, res) => {
   try {
     res.status(200).json({ message: 'Logged out successfully' });
   } catch (error) {
+    console.error('Logout error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -72,24 +58,513 @@ app.get('/auth/me', async (req, res) => {
   try {
     res.status(200).json({ id: '1', name: 'Admin', role: 'admin' });
   } catch (error) {
+    console.error('Get current user error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Also support the old API format for backward compatibility
-app.post('/api/login', async (req, res) => {
+// === INGREDIENTS (WAREHOUSE) ===
+// GET /api/ingredients - Pobierz wszystkie składniki
+app.get('/api/ingredients', async (req, res) => {
   try {
-    console.log('Legacy API login attempt. Request body:', req.body);
-    const { profile, pin } = req.body;
-    if (profile === "Manager" && pin) {
-      res.status(200).json({ "success": true, "message": "Zalogowano pomyślnie", "user": { "name": "Manager", "role": "admin" } });
-    } else {
-      res.status(401).json({ "success": false, "message": "Nieprawidłowy profil lub PIN" });
+    const { rows } = await db.query('SELECT id, name, unit, stock_quantity, nominal_stock, is_active, created_at FROM ingredients WHERE is_active = true ORDER BY name');
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching ingredients:', error);
+    res.status(500).json({ message: 'Error fetching ingredients' });
+  }
+});
+
+// POST /api/ingredients - Stwórz nowy składnik
+app.post('/api/ingredients', async (req, res) => {
+  try {
+    const { name, unit, stock_quantity, nominal_stock } = req.body;
+    const { rows } = await db.query(
+      'INSERT INTO ingredients (name, unit, stock_quantity, nominal_stock) VALUES ($1, $2, $3, $4) RETURNING id, name, unit, stock_quantity, nominal_stock, is_active, created_at',
+      [name, unit, stock_quantity || 0, nominal_stock || 0]
+    );
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating ingredient:', error);
+    res.status(500).json({ message: 'Error creating ingredient' });
+  }
+});
+
+// PUT /api/ingredients/:id - Zaktualizuj składnik (szczególnie stock_quantity)
+app.put('/api/ingredients/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, unit, stock_quantity, nominal_stock, is_active } = req.body;
+    const { rows } = await db.query(
+      'UPDATE ingredients SET name = $1, unit = $2, stock_quantity = $3, nominal_stock = $4, is_active = $5 WHERE id = $6 RETURNING id, name, unit, stock_quantity, nominal_stock, is_active, created_at',
+      [name, unit, stock_quantity, nominal_stock, is_active, id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Ingredient not found' });
+    }
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error updating ingredient:', error);
+    res.status(500).json({ message: 'Error updating ingredient' });
+  }
+});
+
+// DELETE /api/ingredients/:id - Usuń składnik (soft delete)
+app.delete('/api/ingredients/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await db.query(
+      'UPDATE ingredients SET is_active = false WHERE id = $1 RETURNING id, name, unit, stock_quantity, nominal_stock, is_active, created_at',
+      [id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Ingredient not found' });
+    }
+    res.json({ message: 'Ingredient deactivated successfully', ingredient: rows[0] });
+  } catch (error) {
+    console.error('Error deactivating ingredient:', error);
+    res.status(500).json({ message: 'Error deactivating ingredient' });
+  }
+});
+
+// === MENU (PRODUCTS) ===
+// GET /api/menu - Pobierz wszystkie produkty
+app.get('/api/menu', async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM products WHERE is_visible = true ORDER BY "group", name');
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching menu:', error);
+    res.status(500).json({ message: 'Error fetching menu' });
+  }
+});
+
+// POST /api/menu - Stwórz nowy produkt
+app.post('/api/menu', async (req, res) => {
+  try {
+    const { name, price, group, ingredients } = req.body;
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+      const { rows: productRows } = await client.query(
+        'INSERT INTO products (name, price, "group") VALUES ($1, $2, $3) RETURNING *',
+        [name, price, group]
+      );
+      const product = productRows[0];
+      
+      // Jeśli podano składniki, dodaj je do product_ingredients
+      if (ingredients && ingredients.length > 0) {
+        for (const ingredient of ingredients) {
+          await client.query(
+            'INSERT INTO product_ingredients (product_id, ingredient_id, quantity_needed) VALUES ($1, $2, $3)',
+            [product.id, ingredient.ingredient_id, ingredient.quantity_needed]
+          );
+        }
+      }
+      
+      await client.query('COMMIT');
+      res.status(201).json(product);
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
     }
   } catch (error) {
-    console.error('Legacy login error:', error);
-    res.status(500).json({ "success": false, "message": "Wystąpił błąd serwera" });
+    console.error('Error creating product:', error);
+    res.status(500).json({ message: 'Error creating product' });
   }
+});
+
+// PUT /api/menu/:id - Zaktualizuj produkt
+app.put('/api/menu/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, price, group, ingredients } = req.body;
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+      
+      // Aktualizuj produkt
+      const { rows: productRows } = await client.query(
+        'UPDATE products SET name = $1, price = $2, "group" = $3 WHERE id = $4 RETURNING *',
+        [name, price, group, id]
+      );
+      
+      if (productRows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ message: 'Product not found' });
+      }
+      
+      // Usuń stare składniki
+      await client.query('DELETE FROM product_ingredients WHERE product_id = $1', [id]);
+      
+      // Dodaj nowe składniki
+      if (ingredients && ingredients.length > 0) {
+        for (const ingredient of ingredients) {
+          await client.query(
+            'INSERT INTO product_ingredients (product_id, ingredient_id, quantity_needed) VALUES ($1, $2, $3)',
+            [id, ingredient.ingredient_id, ingredient.quantity_needed]
+          );
+        }
+      }
+      
+      await client.query('COMMIT');
+      res.json(productRows[0]);
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error updating product:', error);
+    res.status(500).json({ message: 'Error updating product' });
+  }
+});
+
+// DELETE /api/menu/:id - Usuń produkt
+app.delete('/api/menu/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await db.query(
+      'UPDATE products SET is_visible = false WHERE id = $1 RETURNING *',
+      [id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Product not found' });
+    }
+    res.json({ message: 'Product deactivated successfully' });
+  } catch (error) {
+    console.error('Error deactivating product:', error);
+    res.status(500).json({ message: 'Error deactivating product' });
+  }
+});
+
+// GET /api/menu/:id/ingredients - Pobierz składniki dla produktu
+app.get('/api/menu/:id/ingredients', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await db.query(`
+      SELECT pi.ingredient_id, pi.quantity_needed, i.name as ingredient_name, i.unit
+      FROM product_ingredients pi
+      JOIN ingredients i ON pi.ingredient_id = i.id
+      WHERE pi.product_id = $1
+      ORDER BY i.name
+    `, [id]);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching product ingredients:', error);
+    res.status(500).json({ message: 'Error fetching product ingredients' });
+  }
+});
+
+// === ORDERS ===
+// GET /api/orders - Pobierz otwarte zamówienia
+app.get('/api/orders', async (req, res) => {
+  try {
+    const { status } = req.query;
+    let query = 'SELECT * FROM orders';
+    let params = [];
+    
+    if (status) {
+      query += ' WHERE status = $1';
+      params = [status];
+    }
+    
+    query += ' ORDER BY created_at DESC';
+    
+    const { rows } = await db.query(query, params);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching orders:', error);
+    res.status(500).json({ message: 'Error fetching orders' });
+  }
+});
+
+// POST /api/orders - Stwórz nowe zamówienie
+app.post('/api/orders', async (req, res) => {
+  try {
+    const { userId, items, total } = req.body;
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+      const orderRes = await client.query(
+        'INSERT INTO orders (user_id, total_price, status) VALUES ($1, $2, $3) RETURNING id',
+        [userId, total, 'open']
+      );
+      const orderId = orderRes.rows[0].id;
+      
+      for (const item of items) {
+        await client.query(
+          'INSERT INTO order_items (order_id, product_id, quantity, price_per_item) VALUES ($1, $2, $3, $4)',
+          [orderId, item.id, item.quantity, item.price]
+        );
+      }
+      
+      await client.query('COMMIT');
+      res.status(201).json({ id: orderId, message: 'Order created' });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error creating order:', error);
+    res.status(500).json({ message: 'Error creating order' });
+  }
+});
+
+// POST /api/orders/:id/complete - Zrealizuj zamówienie i zaktualizuj magazyn (NAJWAŻNIEJSZA LOGIKA)
+app.post('/api/orders/:id/complete', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+      
+      // 1. Pobierz wszystkie pozycje dla tego zamówienia (order_items)
+      const { rows: items } = await client.query('SELECT * FROM order_items WHERE order_id = $1', [id]);
+      
+      if (items.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ message: 'Order not found or has no items' });
+      }
+      
+      // 2. Dla każdej pozycji, pobierz jej składniki (BOM) z product_ingredients
+      for (const item of items) {
+        const { rows: ingredients } = await client.query(
+          'SELECT ingredient_id, quantity_needed FROM product_ingredients WHERE product_id = $1',
+          [item.product_id]
+        );
+        
+        // 3. Dla każdego składnika, zaktualizuj jego stan w magazynie
+        for (const ingredient of ingredients) {
+          const totalNeeded = item.quantity * ingredient.quantity_needed;
+          const { rows: updateResult } = await client.query(
+            'UPDATE ingredients SET stock_quantity = stock_quantity - $1 WHERE id = $2 RETURNING stock_quantity',
+            [totalNeeded, ingredient.ingredient_id]
+          );
+          
+          if (updateResult.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ message: `Ingredient ${ingredient.ingredient_id} not found` });
+          }
+          
+          // Removed: Check for negative stock quantity - now allowing negative values
+        }
+      }
+      
+      // 4. Zmień status zamówienia na 'completed'
+      await client.query('UPDATE orders SET status = $1 WHERE id = $2', ['completed', id]);
+      await client.query('COMMIT');
+      
+      res.status(200).json({ message: 'Order completed and stock updated successfully' });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      console.error('Failed to complete order:', e);
+      res.status(500).json({ message: 'Failed to complete order' });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Error completing order:', error);
+    res.status(500).json({ message: 'Error completing order' });
+  }
+});
+
+// PUT /api/orders/:id - Zaktualizuj otwarte zamówienie
+app.put('/api/orders/:id', async (req, res) => {
+  const { id } = req.params;
+  const { items, total_price, user } = req.body; // Zakładamy, że user jest przekazywany dla logów
+  const client = await getClient();
+
+  try {
+    await client.query('BEGIN');
+
+    // 1. Zaktualizuj cenę w głównym zamówieniu
+    await client.query('UPDATE orders SET total_price = $1 WHERE id = $2', [total_price, id]);
+
+    // 2. Usuń stare pozycje zamówienia
+    await client.query('DELETE FROM order_items WHERE order_id = $1', [id]);
+
+    // 3. Wstaw nowe pozycje zamówienia
+    for (const item of items) {
+      await client.query(
+        'INSERT INTO order_items (order_id, product_id, quantity, price_per_item) VALUES ($1, $2, $3, $4)',
+        [id, item.id, item.quantity, item.price]
+      );
+    }
+    
+    // Opcjonalnie: dodaj log o edycji zamówienia
+    if (user && user.id) {
+       await client.query(
+        'INSERT INTO logs (user_id, action, module, details) VALUES ($1, $2, $3, $4)',
+        [user.id, 'UPDATE_ORDER', 'Orders', `User ${user.name} updated order #${id}`]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.status(200).json({ id, message: 'Order updated successfully' });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error updating order:', error);
+    res.status(500).json({ message: 'Error updating order' });
+  } finally {
+    client.release();
+  }
+});
+  
+// === ADDITIONAL ENDPOINTS FOR FRONTEND ===
+
+// Get order with items
+app.get('/api/orders/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows: orderRows } = await db.query('SELECT * FROM orders WHERE id = $1', [id]);
+    
+    if (orderRows.length === 0) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+    
+    const order = orderRows[0];
+    const { rows: itemRows } = await db.query(`
+      SELECT oi.*, p.name as product_name 
+      FROM order_items oi 
+      JOIN products p ON oi.product_id = p.id 
+      WHERE oi.order_id = $1
+    `, [id]);
+    
+    order.items = itemRows;
+    res.json(order);
+  } catch (error) {
+    console.error('Error fetching order:', error);
+    res.status(500).json({ message: 'Error fetching order' });
+  }
+});
+
+// Log system actions
+app.post('/api/logs', async (req, res) => {
+  try {
+    const { user_id, action, module, details } = req.body;
+    const { rows } = await db.query(
+      'INSERT INTO logs (user_id, action, module, details) VALUES ($1, $2, $3, $4) RETURNING *',
+      [user_id, action, module, details]
+    );
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating log:', error);
+    res.status(500).json({ message: 'Error creating log' });
+  }
+});
+
+// Get logs
+app.get('/api/logs', async (req, res) => {
+  try {
+    const { limit = 100, offset = 0 } = req.query;
+    const { rows } = await db.query(`
+      SELECT l.*, u.name as user_name 
+      FROM logs l 
+      LEFT JOIN users u ON l.user_id = u.id 
+      ORDER BY l.created_at DESC 
+      LIMIT $1 OFFSET $2
+    `, [limit, offset]);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching logs:', error);
+    res.status(500).json({ message: 'Error fetching logs' });
+  }
+});
+
+// === SHIFTS (SCHEDULE) ===
+// GET /api/shifts - Pobierz wszystkie zmiany
+app.get('/api/shifts', async (req, res) => {
+  try {
+    const { date } = req.query;
+    let query = `
+      SELECT s.*, u.name as user_name 
+      FROM shifts s 
+      LEFT JOIN users u ON s.user_id = u.id
+    `;
+    let params = [];
+    
+    if (date) {
+      query += ' WHERE DATE(s.start_time) = $1';
+      params = [date];
+    }
+    
+    query += ' ORDER BY s.start_time';
+    
+    const { rows } = await db.query(query, params);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching shifts:', error);
+    res.status(500).json({ message: 'Error fetching shifts' });
+  }
+});
+
+// POST /api/shifts - Stwórz nową zmianę
+app.post('/api/shifts', async (req, res) => {
+  try {
+    const { user_id, start_time, end_time } = req.body;
+    const { rows } = await db.query(
+      'INSERT INTO shifts (user_id, start_time, end_time) VALUES ($1, $2, $3) RETURNING *',
+      [user_id, start_time, end_time]
+    );
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating shift:', error);
+    res.status(500).json({ message: 'Error creating shift' });
+  }
+});
+
+// === REPORTS ===
+// GET /api/reports/daily - Raport dzienny
+app.get('/api/reports/daily', async (req, res) => {
+  try {
+    const { date } = req.query;
+    if (!date) {
+      return res.status(400).json({ message: 'Date parameter is required' });
+    }
+    
+    // Get orders for the date
+    const { rows: orders } = await db.query(`
+      SELECT 
+        COUNT(*) as total_orders,
+        SUM(total_price) as total_revenue,
+        AVG(total_price) as average_order_value
+      FROM orders 
+      WHERE DATE(created_at) = $1 AND status = 'completed'
+    `, [date]);
+    
+    // Get top products
+    const { rows: topProducts } = await db.query(`
+      SELECT 
+        p.name,
+        SUM(oi.quantity) as total_sold,
+        SUM(oi.quantity * oi.price_per_item) as revenue
+      FROM order_items oi
+      JOIN products p ON oi.product_id = p.id
+      JOIN orders o ON oi.order_id = o.id
+      WHERE DATE(o.created_at) = $1 AND o.status = 'completed'
+      GROUP BY p.id, p.name
+      ORDER BY total_sold DESC
+      LIMIT 5
+    `, [date]);
+    
+    res.json({
+      summary: orders[0],
+      topProducts
+    });
+  } catch (error) {
+    console.error('Error generating daily report:', error);
+    res.status(500).json({ message: 'Error generating report' });
+  }
+});
+
+app.get('/', (req, res) => {
+  res.send('Serwer Madziarynki wstał!');
 });
 
 app.listen(port, () => {

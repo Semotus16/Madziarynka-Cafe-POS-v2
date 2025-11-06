@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -8,108 +8,148 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { Badge } from '../ui/badge';
 import { Pencil, Trash2, Plus } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
-import { User } from '../../App';
-
-type WarehouseItem = {
-  id: string;
-  name: string;
-  currentStock: number;
-  nominalStock: number;
-  unit: string;
-  status: 'OK' | 'LOW' | 'CRITICAL';
-};
-
-const INITIAL_WAREHOUSE: WarehouseItem[] = [
-  { id: '1', name: 'Kawa ziarnista', currentStock: 5000, nominalStock: 10000, unit: 'g', status: 'LOW' },
-  { id: '2', name: 'Mleko', currentStock: 15, nominalStock: 20, unit: 'l', status: 'OK' },
-  { id: '3', name: 'Croissant mrożony', currentStock: 20, nominalStock: 50, unit: 'szt', status: 'CRITICAL' },
-  { id: '4', name: 'Cukier', currentStock: 2000, nominalStock: 3000, unit: 'g', status: 'OK' },
-];
+import { toast } from 'sonner';
+import { User } from '../../services/api';
+import { ingredientsAPI, Ingredient } from '../../services/api';
 
 type WarehouseTabProps = {
   user: User;
 };
 
+type WarehouseItem = {
+  id: number;
+  name: string;
+  stock_quantity: number;
+  nominal_stock: number;
+  unit: string;
+  is_active: boolean;
+  status?: 'OK' | 'LOW' | 'CRITICAL';
+};
+
 export default function WarehouseTab({ user }: WarehouseTabProps) {
-  const [items, setItems] = useState<WarehouseItem[]>(INITIAL_WAREHOUSE);
+  const [items, setItems] = useState<WarehouseItem[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<WarehouseItem | null>(null);
-  const [formData, setFormData] = useState({
+  const [isLoading, setIsLoading] = useState(true);
+const [formData, setFormData] = useState({
     name: '',
-    currentStock: '',
-    nominalStock: '',
     unit: '',
+    stock_quantity: '',
+    nominal_stock: '',
   });
 
-  const calculateStatus = (current: number, nominal: number): 'OK' | 'LOW' | 'CRITICAL' => {
+  // Load ingredients from API
+  useEffect(() => {
+    const loadIngredients = async () => {
+      try {
+        setIsLoading(true);
+        const ingredients = await ingredientsAPI.getAll();
+setItems(ingredients.map(ingredient => ({
+          ...ingredient,
+          status: calculateStatus(ingredient.stock_quantity, ingredient.nominal_stock)
+        })));
+      } catch (error) {
+        console.error('Failed to load ingredients:', error);
+        toast.error('Błąd podczas ładowania danych magazynu');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadIngredients();
+  }, []);
+
+  const calculateStatus = (current: number, nominal: number = 10000): 'OK' | 'LOW' | 'CRITICAL' => {
     const percentage = (current / nominal) * 100;
     if (percentage < 30) return 'CRITICAL';
     if (percentage < 50) return 'LOW';
     return 'OK';
   };
 
-  const handleAdd = () => {
+const handleAdd = () => {
     setEditingItem(null);
-    setFormData({ name: '', currentStock: '', nominalStock: '', unit: '' });
+    setFormData({ name: '', unit: '', stock_quantity: '', nominal_stock: '' });
     setIsDialogOpen(true);
   };
 
-  const handleEdit = (item: WarehouseItem) => {
+const handleEdit = (item: WarehouseItem) => {
     setEditingItem(item);
     setFormData({
       name: item.name,
-      currentStock: item.currentStock.toString(),
-      nominalStock: item.nominalStock.toString(),
       unit: item.unit,
+      stock_quantity: item.stock_quantity.toString(),
+      nominal_stock: item.nominal_stock.toString(),
     });
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    setItems(items.filter((item) => item.id !== id));
-    toast.success('Pozycja usunięta');
+  const handleDelete = async (id: number) => {
+    if (!confirm('Czy na pewno chcesz usunąć ten składnik?')) {
+      return;
+    }
+
+    try {
+      await ingredientsAPI.delete(id);
+      setItems(items.filter((item) => item.id !== id));
+      toast.success('Składnik usunięty');
+    } catch (error) {
+      console.error('Failed to delete ingredient:', error);
+      toast.error('Błąd podczas usuwania składnika');
+    }
   };
 
-  const handleSave = () => {
-    if (!formData.name || !formData.currentStock || !formData.nominalStock || !formData.unit) {
+const handleSave = async () => {
+    if (!formData.name || !formData.unit || !formData.stock_quantity || !formData.nominal_stock) {
       toast.error('Wypełnij wszystkie pola');
       return;
     }
 
-    const current = parseFloat(formData.currentStock);
-    const nominal = parseFloat(formData.nominalStock);
-
-    if (editingItem) {
-      setItems(
-        items.map((item) =>
-          item.id === editingItem.id
-            ? {
-                ...item,
-                name: formData.name,
-                currentStock: current,
-                nominalStock: nominal,
-                unit: formData.unit,
-                status: calculateStatus(current, nominal),
-              }
-            : item
-        )
-      );
-      toast.success('Pozycja zaktualizowana');
-    } else {
-      const newItem: WarehouseItem = {
-        id: Date.now().toString(),
-        name: formData.name,
-        currentStock: current,
-        nominalStock: nominal,
-        unit: formData.unit,
-        status: calculateStatus(current, nominal),
-      };
-      setItems([...items, newItem]);
-      toast.success('Pozycja dodana');
+    const stockQuantity = parseFloat(formData.stock_quantity);
+    const nominalStock = parseFloat(formData.nominal_stock);
+    if (isNaN(stockQuantity) || stockQuantity < 0) {
+      toast.error('Stan magazynu musi być liczbą dodatnią');
+      return;
+    }
+    if (isNaN(nominalStock) || nominalStock < 0) {
+      toast.error('Nominalny stan magazynu musi być liczbą dodatnią');
+      return;
     }
 
-    setIsDialogOpen(false);
+    try {
+      if (editingItem) {
+        // Update existing ingredient
+        const updatedIngredient = await ingredientsAPI.update(editingItem.id, {
+          name: formData.name,
+          unit: formData.unit,
+          stock_quantity: stockQuantity,
+          nominal_stock: nominalStock,
+          is_active: true,
+        });
+        
+        setItems(items.map(item =>
+          item.id === editingItem.id
+            ? { ...updatedIngredient, status: calculateStatus(stockQuantity, nominalStock) }
+            : item
+        ));
+        toast.success('Składnik zaktualizowany');
+      } else {
+        // Create new ingredient
+        const newIngredient = await ingredientsAPI.create({
+          name: formData.name,
+          unit: formData.unit,
+          stock_quantity: stockQuantity,
+          nominal_stock: nominalStock,
+          is_active: true,
+        });
+        
+        setItems([...items, { ...newIngredient, status: calculateStatus(stockQuantity, nominalStock) }]);
+        toast.success('Składnik dodany');
+      }
+
+      setIsDialogOpen(false);
+    } catch (error) {
+      console.error('Failed to save ingredient:', error);
+      toast.error('Błąd podczas zapisywania składnika');
+    }
   };
 
   const getStatusBadge = (status: WarehouseItem['status']) => {
@@ -120,8 +160,20 @@ export default function WarehouseTab({ user }: WarehouseTabProps) {
         return <Badge className="bg-yellow-100 text-yellow-800">Niski</Badge>;
       case 'CRITICAL':
         return <Badge className="bg-red-100 text-red-800">Krytyczny</Badge>;
+      default:
+        return <Badge className="bg-gray-100 text-gray-800">Nieznany</Badge>;
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-lg">Ładowanie danych magazynu...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
@@ -129,30 +181,36 @@ export default function WarehouseTab({ user }: WarehouseTabProps) {
         <h2>Magazyn</h2>
         <Button onClick={handleAdd} className="gap-2 bg-amber-600 hover:bg-amber-700">
           <Plus className="w-4 h-4" />
-          Dodaj surowiec
+          Dodaj składnik
         </Button>
       </div>
 
       <Card>
         <Table>
-          <TableHeader>
+<TableHeader>
             <TableRow>
               <TableHead>Nazwa</TableHead>
               <TableHead>Stan</TableHead>
-              <TableHead>Stan nominalny</TableHead>
+              <TableHead>Nominalny</TableHead>
               <TableHead>Jednostka</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Aktywny</TableHead>
               <TableHead className="w-24">Akcje</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {items.map((item) => (
+{items.map((item) => (
               <TableRow key={item.id}>
                 <TableCell>{item.name}</TableCell>
-                <TableCell>{item.currentStock}</TableCell>
-                <TableCell>{item.nominalStock}</TableCell>
+                <TableCell>{item.stock_quantity}</TableCell>
+                <TableCell>{item.nominal_stock}</TableCell>
                 <TableCell>{item.unit}</TableCell>
                 <TableCell>{getStatusBadge(item.status)}</TableCell>
+                <TableCell>
+                  <Badge variant={item.is_active ? "default" : "secondary"}>
+                    {item.is_active ? 'Tak' : 'Nie'}
+                  </Badge>
+                </TableCell>
                 <TableCell>
                   <div className="flex gap-2">
                     <Button
@@ -173,6 +231,13 @@ export default function WarehouseTab({ user }: WarehouseTabProps) {
                 </TableCell>
               </TableRow>
             ))}
+            {items.length === 0 && (
+<TableRow>
+                <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                  Brak składników w magazynie
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </Card>
@@ -181,7 +246,7 @@ export default function WarehouseTab({ user }: WarehouseTabProps) {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {editingItem ? 'Edytuj surowiec' : 'Dodaj surowiec'}
+              {editingItem ? 'Edytuj składnik' : 'Dodaj składnik'}
             </DialogTitle>
           </DialogHeader>
 
@@ -196,22 +261,26 @@ export default function WarehouseTab({ user }: WarehouseTabProps) {
             </div>
 
             <div>
-              <Label>Stan aktualny</Label>
+              <Label>Stan magazynu</Label>
               <Input
                 type="number"
-                value={formData.currentStock}
-                onChange={(e) => setFormData({ ...formData, currentStock: e.target.value })}
+                value={formData.stock_quantity}
+                onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
                 placeholder="0"
+                min="0"
+                step="0.01"
               />
             </div>
 
-            <div>
-              <Label>Stan nominalny</Label>
+<div>
+              <Label>Nominalny stan</Label>
               <Input
                 type="number"
-                value={formData.nominalStock}
-                onChange={(e) => setFormData({ ...formData, nominalStock: e.target.value })}
+                value={formData.nominal_stock}
+                onChange={(e) => setFormData({ ...formData, nominal_stock: e.target.value })}
                 placeholder="0"
+                min="0"
+                step="0.01"
               />
             </div>
 
@@ -219,7 +288,7 @@ export default function WarehouseTab({ user }: WarehouseTabProps) {
               <Label>Jednostka</Label>
               <Select
                 value={formData.unit}
-                onValueChange={(value) => setFormData({ ...formData, unit: value })}
+onValueChange={(value: string) => setFormData({ ...formData, unit: value })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Wybierz jednostkę" />

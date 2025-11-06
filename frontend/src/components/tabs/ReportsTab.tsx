@@ -1,227 +1,156 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
-import { Card } from '../ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { FileDown } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
-import { User } from '../../App';
-
-type SalesReport = {
-  date: string;
-  item: string;
-  quantity: number;
-  revenue: number;
-};
-
-type ExpenseReport = {
-  date: string;
-  vendor: string;
-  amount: number;
-  category: string;
-};
-
-type TimeReport = {
-  employee: string;
-  date: string;
-  hoursWorked: number;
-};
-
-const MOCK_SALES: SalesReport[] = [
-  { date: '2025-11-05', item: 'Cappuccino', quantity: 45, revenue: 540.0 },
-  { date: '2025-11-05', item: 'Croissant', quantity: 30, revenue: 180.0 },
-  { date: '2025-11-06', item: 'Espresso', quantity: 60, revenue: 480.0 },
-];
-
-const MOCK_EXPENSES: ExpenseReport[] = [
-  { date: '2025-11-03', vendor: 'Dostawca Kawy XYZ', amount: 1200.0, category: 'Surowce' },
-  { date: '2025-11-04', vendor: 'Piekarnia ABC', amount: 450.0, category: 'Wypieki' },
-];
-
-const MOCK_TIME: TimeReport[] = [
-  { employee: 'Jan Nowak', date: '2025-11-06', hoursWorked: 8 },
-  { employee: 'Maria Wiśniewska', date: '2025-11-06', hoursWorked: 6 },
-];
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { TrendingUp, TrendingDown } from 'lucide-react';
+import { toast } from 'sonner';
+import { User } from '../../services/api';
+import { reportsAPI } from '../../services/api';
 
 type ReportsTabProps = {
   user: User;
 };
 
 export default function ReportsTab({ user }: ReportsTabProps) {
-  const [dateFrom, setDateFrom] = useState('2025-11-01');
-  const [dateTo, setDateTo] = useState('2025-11-06');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [reportData, setReportData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleExport = (reportType: string) => {
-    toast.success(`Eksportowanie raportu: ${reportType}`);
+  useEffect(() => {
+    const loadReport = async () => {
+      try {
+        setIsLoading(true);
+        const data = await reportsAPI.getDaily(selectedDate);
+        setReportData(data);
+      } catch (error) {
+        console.error('Failed to load report:', error);
+        toast.error('Błąd podczas ładowania raportu');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadReport();
+  }, [selectedDate]);
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pl-PL', { 
+      style: 'currency', 
+      currency: 'PLN' 
+    }).format(value || 0);
   };
+
+  const pieColors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00ff00'];
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-lg">Ładowanie raportu...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
       <h2 className="mb-6">Raporty</h2>
 
-      <Card className="p-4 mb-6">
-        <div className="flex items-end gap-4">
-          <div className="flex-1">
-            <Label>Data od</Label>
-            <Input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-            />
+      <div className="mb-6">
+        <Label>Data raportu</Label>
+        <Input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="w-48"
+        />
+      </div>
+
+      {reportData ? (
+        <div className="space-y-6">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-3 gap-4">
+            <Card className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">Łączna sprzedaż</p>
+                  <p className="text-2xl font-bold">{formatCurrency(reportData.summary?.total_revenue || 0)}</p>
+                </div>
+                <TrendingUp className="w-8 h-8 text-green-500" />
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">Liczba zamówień</p>
+                  <p className="text-2xl font-bold">{reportData.summary?.total_orders || 0}</p>
+                </div>
+                <BarChart className="w-8 h-8 text-blue-500" />
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">Średnia wartość</p>
+                  <p className="text-2xl font-bold">
+                    {formatCurrency(reportData.summary?.average_order_value || 0)}
+                  </p>
+                </div>
+                <TrendingDown className="w-8 h-8 text-orange-500" />
+              </div>
+            </Card>
           </div>
-          <div className="flex-1">
-            <Label>Data do</Label>
-            <Input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-            />
-          </div>
-          <Button className="bg-amber-600 hover:bg-amber-700">
-            Generuj raporty
-          </Button>
+
+          {/* Top Products */}
+          {reportData.topProducts && reportData.topProducts.length > 0 && (
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Top 5 produktów</h3>
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={reportData.topProducts}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="total_sold" fill="#8884d8" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+                <div>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={reportData.topProducts}
+                        dataKey="revenue"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        fill="#8884d8"
+                        label
+                      >
+                        {reportData.topProducts.map((entry: any, index: number) => (
+                          <Cell key={`cell-${index}`} fill={pieColors[index % pieColors.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </Card>
+          )}
         </div>
-      </Card>
-
-      <Tabs defaultValue="sales" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="sales">Sprzedaż</TabsTrigger>
-          <TabsTrigger value="expenses">Wydatki</TabsTrigger>
-          <TabsTrigger value="time">Czas pracy</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="sales">
-          <Card>
-            <div className="p-4 border-b flex items-center justify-between">
-              <h3>Raport sprzedaży</h3>
-              <Button
-                variant="outline"
-                onClick={() => handleExport('Sprzedaż')}
-                className="gap-2"
-              >
-                <FileDown className="w-4 h-4" />
-                Eksportuj CSV
-              </Button>
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Pozycja</TableHead>
-                  <TableHead>Ilość</TableHead>
-                  <TableHead>Przychód</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {MOCK_SALES.map((sale, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell>{sale.date}</TableCell>
-                    <TableCell>{sale.item}</TableCell>
-                    <TableCell>{sale.quantity}</TableCell>
-                    <TableCell>{sale.revenue.toFixed(2)} zł</TableCell>
-                  </TableRow>
-                ))}
-                <TableRow>
-                  <TableCell colSpan={3}><strong>Suma</strong></TableCell>
-                  <TableCell>
-                    <strong>
-                      {MOCK_SALES.reduce((sum, s) => sum + s.revenue, 0).toFixed(2)} zł
-                    </strong>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="expenses">
-          <Card>
-            <div className="p-4 border-b flex items-center justify-between">
-              <h3>Raport wydatków</h3>
-              <Button
-                variant="outline"
-                onClick={() => handleExport('Wydatki')}
-                className="gap-2"
-              >
-                <FileDown className="w-4 h-4" />
-                Eksportuj CSV
-              </Button>
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Dostawca</TableHead>
-                  <TableHead>Kategoria</TableHead>
-                  <TableHead>Kwota</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {MOCK_EXPENSES.map((expense, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell>{expense.date}</TableCell>
-                    <TableCell>{expense.vendor}</TableCell>
-                    <TableCell>{expense.category}</TableCell>
-                    <TableCell>{expense.amount.toFixed(2)} zł</TableCell>
-                  </TableRow>
-                ))}
-                <TableRow>
-                  <TableCell colSpan={3}><strong>Suma</strong></TableCell>
-                  <TableCell>
-                    <strong>
-                      {MOCK_EXPENSES.reduce((sum, e) => sum + e.amount, 0).toFixed(2)} zł
-                    </strong>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="time">
-          <Card>
-            <div className="p-4 border-b flex items-center justify-between">
-              <h3>Raport czasu pracy</h3>
-              <Button
-                variant="outline"
-                onClick={() => handleExport('Czas pracy')}
-                className="gap-2"
-              >
-                <FileDown className="w-4 h-4" />
-                Eksportuj CSV
-              </Button>
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Pracownik</TableHead>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Godziny</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {MOCK_TIME.map((time, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell>{time.employee}</TableCell>
-                    <TableCell>{time.date}</TableCell>
-                    <TableCell>{time.hoursWorked}h</TableCell>
-                  </TableRow>
-                ))}
-                <TableRow>
-                  <TableCell colSpan={2}><strong>Suma godzin</strong></TableCell>
-                  <TableCell>
-                    <strong>
-                      {MOCK_TIME.reduce((sum, t) => sum + t.hoursWorked, 0)}h
-                    </strong>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      ) : (
+        <Card className="p-12 text-center text-gray-500">
+          <p>Brak danych dla wybranej daty</p>
+          <p className="text-sm mt-2">Wybierz inną datę lub utwórz zamówienia</p>
+        </Card>
+      )}
     </div>
   );
 }

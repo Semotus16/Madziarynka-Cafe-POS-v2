@@ -1,180 +1,127 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '../ui/card';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { ScrollArea } from '../ui/scroll-area';
 import { Badge } from '../ui/badge';
-import { User } from '../../App';
+import { Activity } from 'lucide-react';
+import { User } from '../../services/api';
+import { logsAPI } from '../../services/api';
 
-type LogEntry = {
-  id: string;
-  timestamp: string;
-  user: string;
+type Log = {
+  id: number;
+  user_id: number;
   action: string;
   module: string;
   details: string;
+  created_at: string;
+  user_name?: string;
 };
-
-const MOCK_LOGS: LogEntry[] = [
-  {
-    id: '1',
-    timestamp: '2025-11-06 14:30:25',
-    user: 'Anna Kowalska',
-    action: 'Dodano',
-    module: 'Menu',
-    details: 'Dodano nową pozycję: Latte Macchiato',
-  },
-  {
-    id: '2',
-    timestamp: '2025-11-06 12:15:10',
-    user: 'Jan Nowak',
-    action: 'Aktualizacja',
-    module: 'Magazyn',
-    details: 'Zaktualizowano stan: Kawa ziarnista (5000g)',
-  },
-  {
-    id: '3',
-    timestamp: '2025-11-06 10:05:45',
-    user: 'Maria Wiśniewska',
-    action: 'Usunięto',
-    module: 'Grafik',
-    details: 'Usunięto zmianę z dnia 2025-11-10',
-  },
-  {
-    id: '4',
-    timestamp: '2025-11-05 18:22:30',
-    user: 'Anna Kowalska',
-    action: 'Dodano',
-    module: 'Menu',
-    details: 'Dodano nową pozycję: Croissant migdałowy',
-  },
-  {
-    id: '5',
-    timestamp: '2025-11-05 16:40:15',
-    user: 'Piotr Zieliński',
-    action: 'Aktualizacja',
-    module: 'Zamówienia',
-    details: 'Zrealizowano zamówienie #1234',
-  },
-];
 
 type LogsTabProps = {
   user: User;
 };
 
 export default function LogsTab({ user }: LogsTabProps) {
-  const [logs] = useState<LogEntry[]>(MOCK_LOGS);
-  const [filterUser, setFilterUser] = useState<string>('all');
-  const [filterModule, setFilterModule] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [logs, setLogs] = useState<Log[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const filteredLogs = logs.filter((log) => {
-    const matchesUser = filterUser === 'all' || log.user === filterUser;
-    const matchesModule = filterModule === 'all' || log.module === filterModule;
-    const matchesSearch =
-      searchQuery === '' ||
-      log.details.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.action.toLowerCase().includes(searchQuery.toLowerCase());
+  useEffect(() => {
+    const loadLogs = async () => {
+      try {
+        setIsLoading(true);
+        const logsData = await logsAPI.getAll(100, 0);
+        setLogs(logsData);
+      } catch (error) {
+        console.error('Failed to load logs:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadLogs();
+  }, []);
 
-    return matchesUser && matchesModule && matchesSearch;
-  });
-
-  const getActionBadge = (action: string) => {
-    switch (action) {
-      case 'Dodano':
-        return <Badge className="bg-green-100 text-green-800">Dodano</Badge>;
-      case 'Aktualizacja':
-        return <Badge className="bg-blue-100 text-blue-800">Aktualizacja</Badge>;
-      case 'Usunięto':
-        return <Badge className="bg-red-100 text-red-800">Usunięto</Badge>;
-      default:
-        return <Badge>{action}</Badge>;
+  const formatTime = (timestamp: string) => {
+    try {
+      return new Date(timestamp).toLocaleString('pl-PL', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return timestamp;
     }
   };
 
-  const uniqueUsers = Array.from(new Set(logs.map((log) => log.user)));
-  const uniqueModules = Array.from(new Set(logs.map((log) => log.module)));
+  const getModuleBadge = (module: string) => {
+    const colors = {
+      auth: 'bg-blue-100 text-blue-800',
+      orders: 'bg-green-100 text-green-800',
+      products: 'bg-purple-100 text-purple-800',
+      inventory: 'bg-orange-100 text-orange-800',
+      schedule: 'bg-indigo-100 text-indigo-800',
+      default: 'bg-gray-100 text-gray-800',
+    };
+
+    return (
+      <Badge className={colors[module as keyof typeof colors] || colors.default}>
+        {module}
+      </Badge>
+    );
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-lg">Ładowanie logów...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
-      <h2 className="mb-6">Logi systemowe</h2>
+      <div className="flex items-center gap-2 mb-6">
+        <Activity className="w-6 h-6" />
+        <h2>Logi systemowe</h2>
+      </div>
 
-      <Card className="p-4 mb-6">
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <Label>Szukaj</Label>
-            <Input
-              placeholder="Szukaj w szczegółach..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+      <Card className="p-6">
+        {logs.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <p>Brak logów w systemie</p>
           </div>
-          <div>
-            <Label>Użytkownik</Label>
-            <Select value={filterUser} onValueChange={setFilterUser}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Wszyscy</SelectItem>
-                {uniqueUsers.map((user) => (
-                  <SelectItem key={user} value={user}>
-                    {user}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Moduł</Label>
-            <Select value={filterModule} onValueChange={setFilterModule}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Wszystkie</SelectItem>
-                {uniqueModules.map((module) => (
-                  <SelectItem key={module} value={module}>
-                    {module}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+        ) : (
+          <ScrollArea className="h-[calc(100vh-200px)]">
+            <div className="space-y-3">
+              {logs.map((log) => (
+                <Card key={log.id} className="p-4 border-l-4 border-l-blue-500">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      {getModuleBadge(log.module)}
+                      <span className="font-medium">{log.action}</span>
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {formatTime(log.created_at)}
+                    </div>
+                  </div>
+                  
+                  <div className="text-sm text-gray-600 mb-1">
+                    <strong>Użytkownik:</strong> {log.user_name || `ID: ${log.user_id}`}
+                  </div>
+                  
+                  {log.details && (
+                    <div className="text-sm text-gray-600">
+                      <strong>Szczegóły:</strong> {log.details}
+                    </div>
+                  )}
+                </Card>
+              ))}
+            </div>
+          </ScrollArea>
+        )}
       </Card>
-
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Data i czas</TableHead>
-              <TableHead>Użytkownik</TableHead>
-              <TableHead>Akcja</TableHead>
-              <TableHead>Moduł</TableHead>
-              <TableHead>Szczegóły</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredLogs.map((log) => (
-              <TableRow key={log.id}>
-                <TableCell>{log.timestamp}</TableCell>
-                <TableCell>{log.user}</TableCell>
-                <TableCell>{getActionBadge(log.action)}</TableCell>
-                <TableCell>{log.module}</TableCell>
-                <TableCell>{log.details}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Card>
-
-      {filteredLogs.length === 0 && (
-        <div className="text-center py-8 text-gray-500">
-          Brak logów spełniających kryteria wyszukiwania
-        </div>
-      )}
     </div>
   );
 }
