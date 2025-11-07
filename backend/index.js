@@ -47,18 +47,43 @@ const getClient = async () => {
 
 // Helper function to log actions
 const logAction = async (transactionClient, userId, action, module, details) => {
-  const client = transactionClient || db; // Use transaction client if available, otherwise use the general pool
   if (!userId) {
     console.error('LogAction Error: No userId provided for action:', action);
     return;
   }
+  
   try {
+    let client;
+    let shouldRelease = false;
+    
+    if (transactionClient) {
+      // Using provided transaction client
+      client = transactionClient;
+    } else {
+      // Get new client from pool
+      client = await getClient();
+      shouldRelease = true;
+    }
+    
     await client.query(
       'INSERT INTO logs (user_id, action, module, details) VALUES ($1, $2, $3, $4)',
       [userId, action, module, details]
     );
+    
+    console.log(`Successfully logged action: ${action} by user ${userId}`);
+    
+    if (shouldRelease) {
+      client.release();
+    }
   } catch (error) {
-    console.error(`Failed to log action [${action}]:`, error);
+    console.error(`Failed to log action [${action}] for user ${userId}:`, error);
+    
+    // If we're in a transaction and logging fails, we should not throw
+    // because the main operation should still succeed
+    if (!transactionClient) {
+      // For standalone operations, you might want to throw
+      // but for logging, we typically don't want to fail the main operation
+    }
   }
 };
 
@@ -87,7 +112,7 @@ app.post('/auth/login', async (req, res) => {
     const { pin: _, ...userToReturn } = user;
     
     // Log the login action
-    await logAction(db, user.id, 'USER_LOGIN', 'Auth', 'User logged in');
+    await logAction(null, user.id, 'USER_LOGIN', 'Auth', 'User logged in');
     
     res.json({ user: userToReturn, token });
   } catch (error) {
@@ -199,7 +224,7 @@ app.delete('/api/ingredients/:id', authenticateToken, async (req, res) => {
     
     // Log the ingredient deactivation
     if (req.user && req.user.id) {
-      await logAction(db, req.user.id, 'DEACTIVATE_INGREDIENT', 'Warehouse', `Deactivated ingredient #${id}: ${ingredient.name}`);
+      await logAction(null, req.user.id, 'DEACTIVATE_INGREDIENT', 'Warehouse', `Deactivated ingredient #${id}: ${ingredient.name}`);
     }
     
     res.json({ message: 'Ingredient deactivated successfully', ingredient });
@@ -330,7 +355,7 @@ app.delete('/api/menu/:id', authenticateToken, async (req, res) => {
     
     // Log the product deactivation
     if (req.user && req.user.id) {
-      await logAction(db, req.user.id, 'DEACTIVATE_PRODUCT', 'Menu', `Deactivated product #${id}: ${product.name}`);
+      await logAction(null, req.user.id, 'DEACTIVATE_PRODUCT', 'Menu', `Deactivated product #${id}: ${product.name}`);
     }
     
     res.json({ message: 'Product deactivated successfully' });

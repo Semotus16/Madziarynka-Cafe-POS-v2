@@ -227,7 +227,7 @@ export const ingredientsAPI = {
   
   update: async (id: number, ingredient: Partial<Ingredient>, user: User): Promise<Ingredient> => {
     try {
-      const response = await api.put(`/api/ingredients/${id}`, { ...ingredient, user });
+      const response = await api.put(`/api/ingredients/${id}`, ingredient);
       return response.data;
     } catch (error) {
       throw new Error('Failed to update ingredient');
@@ -361,34 +361,9 @@ update: async (orderId: number, items: any[], total: number, user: User): Promis
   },
 };
 
-// === LOGS API ===
-export const newLogsAPI = {
-  getAll: async (limit?: number, offset?: number): Promise<Log[]> => {
-    try {
-      const params = new URLSearchParams();
-      if (limit) params.append('limit', limit.toString());
-      if (offset) params.append('offset', offset.toString());
-      const response = await api.get(`/api/logs?${params.toString()}`);
-      return response.data;
-    } catch (error) {
-      throw new Error('Failed to fetch logs');
-    }
-  },
-  
-  create: async (log: {
-    user_id?: number;
-    action: string;
-    module: string;
-    details: string;
-  }, user: User): Promise<Log> => {
-    try {
-      const response = await api.post('/api/logs', { ...log, user_id: user.id });
-      return response.data;
-    } catch (error) {
-      throw new Error('Failed to create log entry');
-    }
-  },
-};
+// === LOGS API (Duplicate removed - using original logsAPI) ===
+// Note: The newLogsAPI section has been removed to avoid confusion.
+// The original logsAPI (lines 157-174) is what the frontend uses.
 
 // === REPORTS API (placeholder - can be implemented later) ===
 export const newReportsAPI = {

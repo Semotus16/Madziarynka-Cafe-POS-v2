@@ -74,10 +74,10 @@ export default function WarehouseTab({ user }: WarehouseTabProps) {
     }
     try {
       if (formState.id) {
-        await ingredientsAPI.update(formState.id, { ...formState, user } as Ingredient, user);
+        await ingredientsAPI.update(formState.id, formState, user);
         toast.success('Składnik został zaktualizowany.');
       } else {
-        await ingredientsAPI.create({ ...formState, user } as Ingredient, user);
+        await ingredientsAPI.create(formState as Omit<Ingredient, 'id'>, user);
         toast.success('Nowy składnik został dodany.');
       }
       setIsDialogOpen(false);
