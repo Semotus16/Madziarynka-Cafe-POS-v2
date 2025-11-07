@@ -1,0 +1,101 @@
+# Raport testowania systemu logowania - analiza istniejących logów
+
+## Podsumowanie stanu systemu
+- Backend: ✅ Działa na porcie 3001
+- Frontend: ✅ Działa na porcie 3000  
+- API Logs: ✅ Dostępne na GET /api/logs
+- Status testowania: ⚠️ API wymaga autoryzacji, testowanie przez interfejs frontend
+
+## Analiza istniejących logów AKTUALIZACJA_PRODUKTU
+
+### 1. Problemy z formatowaniem cen
+
+#### ❌ Problem 1: Niespójne formatowanie
+- **Log ID 89**: "cena: 16.00 zł → 16 zł"
+  - Stara wartość: 16.00 zł (2 miejsca po przecinku)
+  - Nowa wartość: 16 zł (0 miejsc po przecinku)
+  - **Problem**: Niespójność w wyświetlaniu miejsc po przecinku
+
+#### ❌ Problem 2: Za dużo miejsc po przecinku  
+- **Log ID 80**: "cena: 16.10 zł → 16.105 zł"
+  - Stara wartość: 16.10 zł (2 miejsca po przecinku)
+  - Nowa wartość: 16.105 zł (3 miejsca po przecinku)
+  - **Problem**: Więcej niż 2 miejsca po przecinku
+
+#### ❌ Problem 3: Niespójne formatowanie liczb
+- **Log ID 82**: "cena: 16.11 zł → 16.00 zł"
+- **Log ID 79**: "cena: 16.10 zł → 16.105 zł"
+- **Log ID 54**: "cena: 16.07 zł → 16.075 zł"
+- **Problem**: Niespójność w liczbie miejsc po przecinku
+
+### 2. Problemy z porównywaniem wartości
+
+#### ❌ Problem 4: Logowanie przy braku zmiany
+- **Log ID 43**: "cena: 16.04 zł → 16.04 zł"
+- **Problem**: System loguje zmianę ceny mimo że wartości są identyczne
+
+### 3. Problemy gramatyczne
+
+#### ❌ Problem 5: Błędne odmiany słów
+- **Log ID 89**: "składniki: zaktualizowano 1 składników"
+- **Poprawnie**: "składniki: zaktualizowano 1 składnik"
+- **Problem**: Błędna odmiana - "składników" zamiast "składnik"
+
+### 4. Dobre przykłady z logów
+
+#### ✅ Poprawne formatowanie
+- **Log ID 82**: "cena: 16.11 zł → 16.00 zł" - poprawne formatowanie obu wartości
+- **Log ID 40**: "cena: 16.03 zł → 16.035 zł" - poprawny format, ale za dużo miejsc po przecinku
+
+## Wymagane poprawki
+
+### 1. Formatowanie cen
+```javascript
+// Potrzebne: funkcja do formatowania cen
+function formatPrice(price) {
+    return parseFloat(price).toFixed(2);
+}
+```
+
+### 2. Porównywanie wartości
+```javascript
+// Potrzebne: porównanie przed logowaniem
+if (oldPrice !== newPrice) {
+    logChange(`cena: ${formatPrice(oldPrice)} zł → ${formatPrice(newPrice)} zł`);
+}
+```
+
+### 3. Odmiana słów
+```javascript
+// Potrzebne: funkcja do odmiany polskich słów
+function getCorrectForm(count, singular, plural, genitive) {
+    if (count === 1) return singular;
+    if (count >= 2 && count <= 4) return plural;
+    return genitive;
+}
+```
+
+## Instrukcje testowania po poprawkach
+
+### Test 1: Ta sama wartość ceny
+1. Zmień cenę z 16.00 zł na 16.00 zł
+2. **Oczekiwany wynik**: Brak komunikatu o zmianie ceny w logach
+
+### Test 2: Różne wartości cen
+1. Zmień cenę z 16.00 zł na 18.50 zł
+2. **Oczekiwany wynik**: "cena: 16.00 zł → 18.50 zł"
+
+### Test 3: Formatowanie
+1. Zmień cenę na wartość z wieloma miejscami po przecinku
+2. **Oczekiwany wynik**: Format "XX.XX zł" zawsze z 2 miejscami po przecinku
+
+### Test 4: Składniki - bez zmian
+1. Zmień tylko nazwę produktu (nie składniki)
+2. **Oczekiwany wynik**: Brak komunikatu o zmianie składników
+
+### Test 5: Składniki - ze zmianą
+1. Zmień składniki produktu
+2. **Oczekiwany wynik**: "składniki: zaktualizowano X składnik" (poprawna odmiana)
+
+## Status
+🟡 **WYMAGANE POPRAWKI** - System wymaga napraw przed pełnym testowaniem

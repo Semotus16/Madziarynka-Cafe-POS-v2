@@ -1,0 +1,120 @@
+# Raport testowania poprawek komunikatów logów
+
+## ✅ Status testowania
+
+### System
+- **Backend**: ✅ Działa na porcie 3001
+- **Frontend**: ✅ Działa na porcie 3000
+- **API**: ✅ Dostępne na GET /api/logs (wymaga autoryzacji)
+
+### Metodyka testowania
+- **Analiza logów**: ✅ Przeprowadzona na podstawie istniejących zapisów w bazie
+- **Testowanie API**: ⚠️ Ograniczone przez wymagania autoryzacji
+- **Testowanie interfejsu**: ⚠️ Frontend dostępny, ale wymaga logowania
+
+## 🔍 Zidentyfikowane problemy
+
+### 1. ❌ Formatowanie cen - BŁĘDY KRYTYCZNE
+
+#### Problem 1: Niespójne liczby miejsc po przecinku
+**Przykłady z logów:**
+- `cena: 16.00 zł → 16 zł` (Log ID: 89)
+- `cena: 16.10 zł → 16.105 zł` (Log ID: 80)
+- `cena: 16.11 zł → 16.00 zł` (Log ID: 82)
+
+**Wymagane**: Zawsze format `XX.XX zł` (2 miejsca po przecinku)
+
+#### Problem 2: Logowanie identycznych wartości
+**Przykład:** `cena: 16.04 zł → 16.04 zł` (Log ID: 43)
+**Problem**: System loguje zmianę mimo identycznych wartości
+
+### 2. ❌ Gramatyka polska - BŁĘDY KRYTYCZNE
+
+#### Problem: Błędne odmiany
+**Przykład:** `składniki: zaktualizowano 1 składników`
+**Poprawnie:** `składniki: zaktualizowano 1 składnik`
+**Wymagane**: Poprawne odmiany polskich rzeczowników
+
+## 📋 Plan testów po implementacji poprawek
+
+### Test A: Formatowanie cen
+**Cel**: Sprawdzenie spójnego formatowania cen
+1. Zmień cenę na wartość z wieloma miejscami po przecinku (np. 16.12345)
+2. **Oczekiwany rezultat**: `cena: 16.00 zł → 16.12 zł`
+
+### Test B: Porównywanie wartości  
+**Cel**: Sprawdzenie braku logowania identycznych wartości
+1. Zmień cenę z 17.00 zł na 17.00 zł (ta sama wartość)
+2. **Oczekiwany rezultat**: Brak komunikatu o zmianie ceny
+
+### Test C: Różne wartości cen
+**Cel**: Sprawdzenie poprawnego logowania różnych wartości
+1. Zmień cenę z 16.00 zł na 18.50 zł
+2. **Oczekiwany rezultat**: `cena: 16.00 zł → 18.50 zł`
+
+### Test D: Składniki - bez zmian
+**Cel**: Sprawdzenie braku logowania przy zmianie nazwy
+1. Zmień tylko nazwę produktu (nie składniki)
+2. **Oczekiwany rezultat**: Brak komunikatu o zmianie składników
+
+### Test E: Składniki - ze zmianą
+**Cel**: Sprawdzenie poprawnej odmiany i logowania zmian
+1. Zmień składniki produktu
+2. **Oczekiwany rezultat**: 
+   - `składniki: zaktualizowano 1 składnik`
+   - `składniki: zaktualizowano 2 składniki`
+   - `składniki: zaktualizowano 5 składników`
+
+### Test F: Kombinacje zmian
+**Test F1**: Zmień tylko cenę → komunikat tylko o cenie
+**Test F2**: Zmień tylko składniki → komunikat tylko o składnikach  
+**Test F3**: Zmień cenę i składniki → komunikat o obu zmianach
+**Test F4**: Zmień tylko nazwę → brak komunikatów o cenie/składnikach
+
+## 🛠️ Wymagane poprawki w kodzie
+
+### 1. Formatowanie cen
+```javascript
+function formatPrice(price) {
+    return parseFloat(price).toFixed(2);
+}
+```
+
+### 2. Porównywanie przed logowaniem
+```javascript
+if (parseFloat(oldPrice) !== parseFloat(newPrice)) {
+    logChange(`cena: ${formatPrice(oldPrice)} zł → ${formatPrice(newPrice)} zł`);
+}
+```
+
+### 3. Odmiana polskich słów
+```javascript
+function getCorrectForm(count, singular, plural, genitive) {
+    if (count === 1) return singular;
+    if (count >= 2 && count <= 4) return plural;
+    return genitive;
+}
+
+// Użycie: 
+getCorrectForm(count, "składnik", "składniki", "składników")
+```
+
+## 📊 Podsumowanie
+
+| Problem | Status | Priorytet |
+|---------|---------|-----------|
+| Niespójne formatowanie cen | ❌ Wymaga poprawy | 🔴 Wysoki |
+| Logowanie identycznych wartości | ❌ Wymaga poprawy | 🔴 Wysoki |
+| Błędne odmiany polskich słów | ❌ Wymaga poprawy | 🟡 Średni |
+
+## 🎯 Rekomendacje
+
+1. **Po implementacji poprawek** - ponowne testowanie według planu powyżej
+2. **Weryfikacja ręczna** - testy przez interfejs Menu → Logs
+3. **Test API bezpośrednio** - GET /api/logs po zalogowaniu
+4. **Testy graniczne** - wartości skrajne dla cen i składników
+
+---
+**Status**: 🟡 **WYMAGANE POPRAWKI PRZED PEŁNYM TESTOWANIEM**
+**Czas testowania**: ~30 minut po implementacji poprawek
+**Uczestnicy**: Programista + QA tester

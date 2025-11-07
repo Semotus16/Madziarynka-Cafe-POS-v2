@@ -1,0 +1,11 @@
+{
+  "name": "Cappuccino",
+  "price": 18.00,
+  "group": "Kawa",
+  "ingredients": [
+    {
+      "ingredient_id": 4,
+      "quantity_needed": 1.03
+    }
+  ]
+}

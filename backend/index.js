@@ -2,6 +2,25 @@ const express = require('express');
 const cors = require('cors');
 const db = require('./db'); // Importuj połączenie z bazą
 
+// === FORMATOWANIE I POMOCNICZE FUNKCJE ===
+// Funkcja formatowania cen - zawsze 2 miejsca po przecinku
+function formatPrice(price) {
+  if (price === null || price === undefined) return '0.00';
+  return parseFloat(price).toFixed(2);
+}
+
+// Funkcja odmiany polskiej gramatyki
+function formatPolishNumber(count, singular, pluralGenitive) {
+  if (count === 1) return singular;
+  if (count >= 2 && count <= 4) return 'składniki'; // Hardcoded for proper Polish grammar
+  return pluralGenitive; // "składników" dla 5+
+}
+
+// Funkcja formatowania liczby składników
+function formatIngredientsCount(count) {
+  return formatPolishNumber(count, 'składnik', 'składników');
+}
+
 const app = express();
 const port = 3001;
 
@@ -163,7 +182,7 @@ app.post('/api/ingredients', authenticateToken, async (req, res) => {
     );
     const newIngredient = rows[0];
     if (req.user && req.user.id) {
-      await logAction(null, req.user.id, 'UTWORZENIE_SKŁADNIKA', 'Magazyn', `Utworzono nowy składnik: ${newIngredient.name} (ilość: ${newIngredient.stock_quantity} ${newIngredient.unit}, stan nominalny: ${newIngredient.nominal_stock} ${newIngredient.unit})`);
+      await logAction(null, req.user.id, 'UTWORZENIE_SKŁADNIKA', 'Magazyn', `Utworzono nowy składnik: ${newIngredient.name} (ilość: ${formatPrice(newIngredient.stock_quantity)} ${newIngredient.unit}, stan nominalny: ${formatPrice(newIngredient.nominal_stock)} ${newIngredient.unit})`);
     }
     res.status(201).json(newIngredient);
   } catch (error) {
@@ -176,17 +195,6 @@ app.post('/api/ingredients', authenticateToken, async (req, res) => {
 app.put('/api/ingredients/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const { name, stock_quantity, unit, is_active, nominal_stock } = req.body;
-  
-  // Debug logging to identify the issue
-  console.log('PUT /api/ingredients/:id - Request body:', {
-    id,
-    name,
-    stock_quantity,
-    unit,
-    is_active,
-    nominal_stock,
-    nominal_stock_type: typeof nominal_stock
-  });
   
   try {
     // Pobierz poprzednie wartości składnika przed aktualizacją
@@ -206,19 +214,37 @@ app.put('/api/ingredients/:id', authenticateToken, async (req, res) => {
       [name, stock_quantity, unit, is_active, nominal_stock, id]
     );
     
-    console.log('PUT /api/ingredients/:id - Database result:', rows[0]);
-    
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Ingredient not found' });
     }
     if (req.user && req.user.id) {
       // Szczegółowe porównanie wartości przed i po zmianie
       const changes = [];
-      if (oldIngredient.name !== name) changes.push(`nazwa: "${oldIngredient.name}" → "${name}"`);
-      if (oldIngredient.stock_quantity !== stock_quantity) changes.push(`ilość w magazynie: ${oldIngredient.stock_quantity} ${oldIngredient.unit} → ${stock_quantity} ${oldIngredient.unit}`);
-      if (oldIngredient.nominal_stock !== nominal_stock) changes.push(`stan nominalny: ${oldIngredient.nominal_stock} ${oldIngredient.unit} → ${nominal_stock} ${oldIngredient.unit}`);
-      if (oldIngredient.unit !== unit) changes.push(`jednostka: "${oldIngredient.unit}" → "${unit}"`);
-      if (oldIngredient.is_active !== is_active) changes.push(`status: ${oldIngredient.is_active ? 'aktywny' : 'nieaktywny'} → ${is_active ? 'aktywny' : 'nieaktywny'}`);
+      
+      // Sprawdź zmiany nazwy (string comparison)
+      if (oldIngredient.name !== name) {
+        changes.push(`nazwa: "${oldIngredient.name}" → "${name}"`);
+      }
+      
+      // Sprawdź zmiany ilości w magazynie (porównanie sformatowanych wartości)
+      if (oldIngredient.stock_quantity && stock_quantity && formatPrice(oldIngredient.stock_quantity) !== formatPrice(stock_quantity)) {
+        changes.push(`ilość w magazynie: ${formatPrice(oldIngredient.stock_quantity)} ${oldIngredient.unit} → ${formatPrice(stock_quantity)} ${oldIngredient.unit}`);
+      }
+      
+      // Sprawdź zmiany stanu nominalnego (floating point comparison with proper formatting)
+      if (oldIngredient.nominal_stock && nominal_stock && parseFloat(oldIngredient.nominal_stock) !== parseFloat(nominal_stock)) {
+        changes.push(`stan nominalny: ${formatPrice(oldIngredient.nominal_stock)} ${oldIngredient.unit} → ${formatPrice(nominal_stock)} ${oldIngredient.unit}`);
+      }
+      
+      // Sprawdź zmiany jednostki
+      if (oldIngredient.unit !== unit) {
+        changes.push(`jednostka: "${oldIngredient.unit}" → "${unit}"`);
+      }
+      
+      // Sprawdź zmiany statusu
+      if (oldIngredient.is_active !== is_active) {
+        changes.push(`status: ${oldIngredient.is_active ? 'aktywny' : 'nieaktywny'} → ${is_active ? 'aktywny' : 'nieaktywny'}`);
+      }
       
       const changesText = changes.length > 0 ? ` (zmiany: ${changes.join(', ')})` : ' (brak zmian)';
       await logAction(null, req.user.id, 'AKTUALIZACJA_SKŁADNIKA', 'Magazyn', `Zaktualizowano składnik: ${name}${changesText}`);
@@ -245,7 +271,7 @@ app.delete('/api/ingredients/:id', authenticateToken, async (req, res) => {
     
     // Log the ingredient deactivation
     if (req.user && req.user.id) {
-      await logAction(null, req.user.id, 'DEZAKTYWACJA_SKŁADNIKA', 'Magazyn', `Dezaktywowano składnik: ${ingredient.name} (poprzednia ilość: ${ingredient.stock_quantity} ${ingredient.unit})`);
+      await logAction(null, req.user.id, 'DEZAKTYWACJA_SKŁADNIKA', 'Magazyn', `Dezaktywowano składnik: ${ingredient.name} (poprzednia ilość: ${formatPrice(ingredient.stock_quantity)} ${ingredient.unit})`);
     }
     
     res.json({ message: 'Ingredient deactivated successfully', ingredient });
@@ -292,7 +318,7 @@ app.post('/api/menu', authenticateToken, async (req, res) => {
       
       // Log the product creation
       if (req.user && req.user.id) {
-        await logAction(client, req.user.id, 'UTWORZENIE_PRODUKTU', 'Menu', `Utworzono nowy produkt: ${product.name} (cena: ${product.price} zł, grupa: ${product.group})`);
+        await logAction(client, req.user.id, 'UTWORZENIE_PRODUKTU', 'Menu', `Utworzono nowy produkt: ${product.name} (cena: ${formatPrice(product.price)} zł, grupa: ${product.group})`);
       }
       
       await client.query('COMMIT');
@@ -342,17 +368,16 @@ app.put('/api/menu/:id', authenticateToken, async (req, res) => {
         return res.status(404).json({ message: 'Product not found' });
       }
       
-      // Usuń stare składniki
-      await client.query('DELETE FROM product_ingredients WHERE product_id = $1', [id]);
-      
-      // Pobierz poprzednie składniki przed usunięciem
+      // Pobierz poprzednie składniki PRZED usunięciem
       const { rows: oldIngredients } = await client.query(
         'SELECT ingredient_id, quantity_needed FROM product_ingredients WHERE product_id = $1 ORDER BY ingredient_id',
         [id]
       );
       
+      // Usuń stare składniki
+      await client.query('DELETE FROM product_ingredients WHERE product_id = $1', [id]);
+      
       // Dodaj nowe składniki
-      let ingredientsChanged = false;
       if (ingredients && ingredients.length > 0) {
         for (const ingredient of ingredients) {
           await client.query(
@@ -362,33 +387,46 @@ app.put('/api/menu/:id', authenticateToken, async (req, res) => {
         }
       }
       
-      // Sprawdź czy składniki się zmieniły
-      const newIngredients = ingredients ? [...ingredients].sort((a, b) => a.ingredient_id - b.ingredient_id) : [];
-      const oldIngredientsSorted = [...oldIngredients].sort((a, b) => a.ingredient_id - b.ingredient_id);
+      // Pobierz nowe składniki PO dodaniu
+      const { rows: newIngredients } = await client.query(
+        'SELECT ingredient_id, quantity_needed FROM product_ingredients WHERE product_id = $1 ORDER BY ingredient_id',
+        [id]
+      );
       
-      if (newIngredients.length !== oldIngredientsSorted.length) {
-        ingredientsChanged = true;
-      } else {
-        for (let i = 0; i < newIngredients.length; i++) {
-          if (newIngredients[i].ingredient_id !== oldIngredientsSorted[i].ingredient_id ||
-              newIngredients[i].quantity_needed !== oldIngredientsSorted[i].quantity_needed) {
-            ingredientsChanged = true;
-            break;
-          }
-        }
-      }
+      // Sprawdź czy składniki się zmieniły - proste porównanie JSON
+      const oldIngredientsJSON = JSON.stringify([...oldIngredients].sort((a, b) => a.ingredient_id - b.ingredient_id));
+      const newIngredientsJSON = JSON.stringify([...newIngredients].sort((a, b) => a.ingredient_id - b.ingredient_id));
+      const ingredientsChanged = oldIngredientsJSON !== newIngredientsJSON;
       
       // Log the product update
       if (req.user && req.user.id) {
         // Szczegółowe porównanie wartości przed i po zmianie
         const changes = [];
-        if (oldProduct.name !== name) changes.push(`nazwa: "${oldProduct.name}" → "${name}"`);
-        if (oldProduct.price !== price) changes.push(`cena: ${oldProduct.price} zł → ${price} zł`);
-        if (oldProduct.group !== group) changes.push(`grupa: "${oldProduct.group}" → "${group}"`);
         
+        // Sprawdź zmiany nazwy (string comparison)
+        if (oldProduct.name !== name) {
+          changes.push(`nazwa: "${oldProduct.name}" → "${name}"`);
+        }
+        
+        // Sprawdź zmiany ceny (porównanie sformatowanych wartości)
+        if (oldProduct.price && price && formatPrice(oldProduct.price) !== formatPrice(price)) {
+          changes.push(`cena: ${formatPrice(oldProduct.price)} zł → ${formatPrice(price)} zł`);
+        }
+        
+        // Sprawdź zmiany grupy
+        if (oldProduct.group !== group) {
+          changes.push(`grupa: "${oldProduct.group}" → "${group}"`);
+        }
+        
+        // Sprawdź zmiany składników tylko jeśli rzeczywiście się zmieniły
         if (ingredientsChanged) {
-          const ingredientCount = ingredients ? ingredients.length : 0;
-          changes.push(`składniki: zaktualizowano ${ingredientCount} składników`);
+          const oldCount = oldIngredients.length;
+          const newCount = newIngredients.length;
+          if (oldCount !== newCount) {
+            changes.push(`składniki: ${oldCount} → ${newCount} ${formatIngredientsCount(newCount)}`);
+          } else {
+            changes.push(`składniki: zaktualizowano ${formatIngredientsCount(newCount)}`);
+          }
         }
         
         const changesText = changes.length > 0 ? ` (zmiany: ${changes.join(', ')})` : ' (brak zmian)';
@@ -424,7 +462,7 @@ app.delete('/api/menu/:id', authenticateToken, async (req, res) => {
     
     // Log the product deactivation
     if (req.user && req.user.id) {
-      await logAction(null, req.user.id, 'DEZAKTYWACJA_PRODUKTU', 'Menu', `Dezaktywowano produkt: ${product.name} (poprzednia cena: ${product.price} zł)`);
+      await logAction(null, req.user.id, 'DEZAKTYWACJA_PRODUKTU', 'Menu', `Dezaktywowano produkt: ${product.name} (poprzednia cena: ${formatPrice(product.price)} zł)`);
     }
     
     res.json({ message: 'Product deactivated successfully' });
@@ -508,7 +546,7 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
       
       // Log the order creation with detailed item information
       const itemsText = productNames.join(', ');
-      await logAction(client, req.user.id, 'UTWORZENIE_ZAMÓWIENIA', 'Zamówienia', `Utworzono nowe zamówienie #${orderId} o łącznej wartości ${total} zł. Pozycje: ${itemsText}`);
+      await logAction(client, req.user.id, 'UTWORZENIE_ZAMÓWIENIA', 'Zamówienia', `Utworzono nowe zamówienie #${orderId} o łącznej wartości ${formatPrice(total)} zł. Pozycje: ${itemsText}`);
       
       await client.query('COMMIT');
       res.status(201).json({ id: orderId, message: 'Order created' });
@@ -611,7 +649,7 @@ app.put('/api/orders/:id', authenticateToken, async (req, res) => {
     
     // Log the order update using authenticated user
     if (req.user && req.user.id) {
-      await logAction(client, req.user.id, 'AKTUALIZACJA_ZAMÓWIENIA', 'Zamówienia', `Zaktualizowano zamówienie #${id} (nowa wartość: ${total_price} zł, ${items.length} pozycji)`);
+      await logAction(client, req.user.id, 'AKTUALIZACJA_ZAMÓWIENIA', 'Zamówienia', `Zaktualizowano zamówienie #${id} (nowa wartość: ${formatPrice(total_price)} zł, ${items.length} pozycji)`);
     }
 
     await client.query('COMMIT');
