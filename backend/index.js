@@ -48,7 +48,7 @@ const getClient = async () => {
 // Helper function to log actions
 const logAction = async (transactionClient, userId, action, module, details) => {
   if (!userId) {
-    console.error('LogAction Error: No userId provided for action:', action);
+    console.error('LogAction Błąd: Brak userId dla akcji:', action);
     return;
   }
   
@@ -70,13 +70,13 @@ const logAction = async (transactionClient, userId, action, module, details) => 
       [userId, action, module, details]
     );
     
-    console.log(`Successfully logged action: ${action} by user ${userId}`);
+    console.log(`Pomyślnie zalogowano akcję: ${action} przez użytkownika ${userId}`);
     
     if (shouldRelease) {
       client.release();
     }
   } catch (error) {
-    console.error(`Failed to log action [${action}] for user ${userId}:`, error);
+    console.error(`Nie udało się zalogować akcji [${action}] dla użytkownika ${userId}:`, error);
     
     // If we're in a transaction and logging fails, we should not throw
     // because the main operation should still succeed
@@ -112,7 +112,7 @@ app.post('/auth/login', async (req, res) => {
     const { pin: _, ...userToReturn } = user;
     
     // Log the login action
-    await logAction(null, user.id, 'USER_LOGIN', 'Auth', 'User logged in');
+    await logAction(null, user.id, 'LOGOWANIE_UŻYTKOWNIKA', 'Autoryzacja', 'Użytkownik zalogował się do systemu');
     
     res.json({ user: userToReturn, token });
   } catch (error) {
@@ -163,7 +163,7 @@ app.post('/api/ingredients', authenticateToken, async (req, res) => {
     );
     const newIngredient = rows[0];
     if (req.user && req.user.id) {
-      await logAction(null, req.user.id, 'CREATE_INGREDIENT', 'Warehouse', `User created ingredient: ${newIngredient.name}`);
+      await logAction(null, req.user.id, 'UTWORZENIE_SKŁADNIKA', 'Magazyn', `Utworzono nowy składnik: ${newIngredient.name} (ilość: ${newIngredient.stock_quantity} ${newIngredient.unit}, stan nominalny: ${newIngredient.nominal_stock} ${newIngredient.unit})`);
     }
     res.status(201).json(newIngredient);
   } catch (error) {
@@ -189,6 +189,18 @@ app.put('/api/ingredients/:id', authenticateToken, async (req, res) => {
   });
   
   try {
+    // Pobierz poprzednie wartości składnika przed aktualizacją
+    const { rows: oldRows } = await db.query(
+      'SELECT * FROM ingredients WHERE id = $1',
+      [id]
+    );
+    
+    if (oldRows.length === 0) {
+      return res.status(404).json({ message: 'Ingredient not found' });
+    }
+    
+    const oldIngredient = oldRows[0];
+    
     const { rows } = await db.query(
       'UPDATE ingredients SET name = $1, stock_quantity = $2, unit = $3, is_active = $4, nominal_stock = $5 WHERE id = $6 RETURNING *',
       [name, stock_quantity, unit, is_active, nominal_stock, id]
@@ -200,7 +212,16 @@ app.put('/api/ingredients/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ message: 'Ingredient not found' });
     }
     if (req.user && req.user.id) {
-      await logAction(null, req.user.id, 'UPDATE_INGREDIENT', 'Warehouse', `User updated ingredient #${id}`);
+      // Szczegółowe porównanie wartości przed i po zmianie
+      const changes = [];
+      if (oldIngredient.name !== name) changes.push(`nazwa: "${oldIngredient.name}" → "${name}"`);
+      if (oldIngredient.stock_quantity !== stock_quantity) changes.push(`ilość w magazynie: ${oldIngredient.stock_quantity} ${oldIngredient.unit} → ${stock_quantity} ${oldIngredient.unit}`);
+      if (oldIngredient.nominal_stock !== nominal_stock) changes.push(`stan nominalny: ${oldIngredient.nominal_stock} ${oldIngredient.unit} → ${nominal_stock} ${oldIngredient.unit}`);
+      if (oldIngredient.unit !== unit) changes.push(`jednostka: "${oldIngredient.unit}" → "${unit}"`);
+      if (oldIngredient.is_active !== is_active) changes.push(`status: ${oldIngredient.is_active ? 'aktywny' : 'nieaktywny'} → ${is_active ? 'aktywny' : 'nieaktywny'}`);
+      
+      const changesText = changes.length > 0 ? ` (zmiany: ${changes.join(', ')})` : ' (brak zmian)';
+      await logAction(null, req.user.id, 'AKTUALIZACJA_SKŁADNIKA', 'Magazyn', `Zaktualizowano składnik: ${name}${changesText}`);
     }
     res.json(rows[0]);
   } catch (error) {
@@ -224,7 +245,7 @@ app.delete('/api/ingredients/:id', authenticateToken, async (req, res) => {
     
     // Log the ingredient deactivation
     if (req.user && req.user.id) {
-      await logAction(null, req.user.id, 'DEACTIVATE_INGREDIENT', 'Warehouse', `Deactivated ingredient #${id}: ${ingredient.name}`);
+      await logAction(null, req.user.id, 'DEZAKTYWACJA_SKŁADNIKA', 'Magazyn', `Dezaktywowano składnik: ${ingredient.name} (poprzednia ilość: ${ingredient.stock_quantity} ${ingredient.unit})`);
     }
     
     res.json({ message: 'Ingredient deactivated successfully', ingredient });
@@ -271,7 +292,7 @@ app.post('/api/menu', authenticateToken, async (req, res) => {
       
       // Log the product creation
       if (req.user && req.user.id) {
-        await logAction(client, req.user.id, 'CREATE_PRODUCT', 'Menu', `Created product: ${product.name}`);
+        await logAction(client, req.user.id, 'UTWORZENIE_PRODUKTU', 'Menu', `Utworzono nowy produkt: ${product.name} (cena: ${product.price} zł, grupa: ${product.group})`);
       }
       
       await client.query('COMMIT');
@@ -297,6 +318,19 @@ app.put('/api/menu/:id', authenticateToken, async (req, res) => {
     try {
       await client.query('BEGIN');
       
+      // Pobierz poprzednie wartości produktu przed aktualizacją
+      const { rows: oldProductRows } = await client.query(
+        'SELECT * FROM products WHERE id = $1',
+        [id]
+      );
+      
+      if (oldProductRows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ message: 'Product not found' });
+      }
+      
+      const oldProduct = oldProductRows[0];
+      
       // Aktualizuj produkt
       const { rows: productRows } = await client.query(
         'UPDATE products SET name = $1, price = $2, "group" = $3 WHERE id = $4 RETURNING *',
@@ -311,7 +345,14 @@ app.put('/api/menu/:id', authenticateToken, async (req, res) => {
       // Usuń stare składniki
       await client.query('DELETE FROM product_ingredients WHERE product_id = $1', [id]);
       
+      // Pobierz poprzednie składniki przed usunięciem
+      const { rows: oldIngredients } = await client.query(
+        'SELECT ingredient_id, quantity_needed FROM product_ingredients WHERE product_id = $1 ORDER BY ingredient_id',
+        [id]
+      );
+      
       // Dodaj nowe składniki
+      let ingredientsChanged = false;
       if (ingredients && ingredients.length > 0) {
         for (const ingredient of ingredients) {
           await client.query(
@@ -321,9 +362,37 @@ app.put('/api/menu/:id', authenticateToken, async (req, res) => {
         }
       }
       
+      // Sprawdź czy składniki się zmieniły
+      const newIngredients = ingredients ? [...ingredients].sort((a, b) => a.ingredient_id - b.ingredient_id) : [];
+      const oldIngredientsSorted = [...oldIngredients].sort((a, b) => a.ingredient_id - b.ingredient_id);
+      
+      if (newIngredients.length !== oldIngredientsSorted.length) {
+        ingredientsChanged = true;
+      } else {
+        for (let i = 0; i < newIngredients.length; i++) {
+          if (newIngredients[i].ingredient_id !== oldIngredientsSorted[i].ingredient_id ||
+              newIngredients[i].quantity_needed !== oldIngredientsSorted[i].quantity_needed) {
+            ingredientsChanged = true;
+            break;
+          }
+        }
+      }
+      
       // Log the product update
       if (req.user && req.user.id) {
-        await logAction(client, req.user.id, 'UPDATE_PRODUCT', 'Menu', `Updated product #${id}: ${name}`);
+        // Szczegółowe porównanie wartości przed i po zmianie
+        const changes = [];
+        if (oldProduct.name !== name) changes.push(`nazwa: "${oldProduct.name}" → "${name}"`);
+        if (oldProduct.price !== price) changes.push(`cena: ${oldProduct.price} zł → ${price} zł`);
+        if (oldProduct.group !== group) changes.push(`grupa: "${oldProduct.group}" → "${group}"`);
+        
+        if (ingredientsChanged) {
+          const ingredientCount = ingredients ? ingredients.length : 0;
+          changes.push(`składniki: zaktualizowano ${ingredientCount} składników`);
+        }
+        
+        const changesText = changes.length > 0 ? ` (zmiany: ${changes.join(', ')})` : ' (brak zmian)';
+        await logAction(client, req.user.id, 'AKTUALIZACJA_PRODUKTU', 'Menu', `Zaktualizowano produkt: ${name}${changesText}`);
       }
       
       await client.query('COMMIT');
@@ -355,7 +424,7 @@ app.delete('/api/menu/:id', authenticateToken, async (req, res) => {
     
     // Log the product deactivation
     if (req.user && req.user.id) {
-      await logAction(null, req.user.id, 'DEACTIVATE_PRODUCT', 'Menu', `Deactivated product #${id}: ${product.name}`);
+      await logAction(null, req.user.id, 'DEZAKTYWACJA_PRODUKTU', 'Menu', `Dezaktywowano produkt: ${product.name} (poprzednia cena: ${product.price} zł)`);
     }
     
     res.json({ message: 'Product deactivated successfully' });
@@ -419,15 +488,27 @@ app.post('/api/orders', authenticateToken, async (req, res) => {
       );
       const orderId = orderRes.rows[0].id;
       
+      // Zbierz nazwy produktów dla szczegółowego logowania
+      const productNames = [];
       for (const item of items) {
         await client.query(
           'INSERT INTO order_items (order_id, product_id, quantity, price_per_item) VALUES ($1, $2, $3, $4)',
           [orderId, item.id, item.quantity, item.price]
         );
+        
+        // Pobierz nazwę produktu dla logowania
+        const { rows: productRows } = await client.query(
+          'SELECT name FROM products WHERE id = $1',
+          [item.id]
+        );
+        if (productRows.length > 0) {
+          productNames.push(`${productRows[0].name} x ${item.quantity} szt.`);
+        }
       }
       
-      // Log the order creation
-      await logAction(client, req.user.id, 'CREATE_ORDER', 'Orders', `Created order #${orderId}`);
+      // Log the order creation with detailed item information
+      const itemsText = productNames.join(', ');
+      await logAction(client, req.user.id, 'UTWORZENIE_ZAMÓWIENIA', 'Zamówienia', `Utworzono nowe zamówienie #${orderId} o łącznej wartości ${total} zł. Pozycje: ${itemsText}`);
       
       await client.query('COMMIT');
       res.status(201).json({ id: orderId, message: 'Order created' });
@@ -487,7 +568,7 @@ app.post('/api/orders/:id/complete', authenticateToken, async (req, res) => {
       await client.query('UPDATE orders SET status = $1 WHERE id = $2', ['completed', id]);
       
       // Log the order completion
-      await logAction(client, req.user.id, 'COMPLETE_ORDER', 'Orders', `Completed order #${id}`);
+      await logAction(client, req.user.id, 'ZAKOŃCZENIE_ZAMÓWIENIA', 'Zamówienia', `Zrealizowano zamówienie #${id} i zaktualizowano stan magazynu`);
       
       await client.query('COMMIT');
       
@@ -530,7 +611,7 @@ app.put('/api/orders/:id', authenticateToken, async (req, res) => {
     
     // Log the order update using authenticated user
     if (req.user && req.user.id) {
-      await logAction(client, req.user.id, 'UPDATE_ORDER', 'Orders', `Updated order #${id}`);
+      await logAction(client, req.user.id, 'AKTUALIZACJA_ZAMÓWIENIA', 'Zamówienia', `Zaktualizowano zamówienie #${id} (nowa wartość: ${total_price} zł, ${items.length} pozycji)`);
     }
 
     await client.query('COMMIT');
@@ -590,18 +671,108 @@ app.post('/api/logs', async (req, res) => {
 // Get logs
 app.get('/api/logs', async (req, res) => {
   try {
-    const { limit = 100, offset = 0 } = req.query;
-    const { rows } = await db.query(`
-      SELECT l.*, u.name as user_name 
-      FROM logs l 
-      LEFT JOIN users u ON l.user_id = u.id 
-      ORDER BY l.created_at DESC 
-      LIMIT $1 OFFSET $2
-    `, [limit, offset]);
+    const {
+      limit = 100,
+      offset = 0,
+      user_id,
+      action,
+      module,
+      date_from,
+      date_to
+    } = req.query;
+    
+    // Build WHERE clause with safe SQL injection protection
+    const conditions = [];
+    const params = [];
+    let paramIndex = 1;
+    
+    // Add filtering conditions
+    if (user_id && user_id !== 'all') {
+      conditions.push(`l.user_id = $${paramIndex}`);
+      params.push(parseInt(user_id));
+      paramIndex++;
+    }
+    
+    if (action && action !== 'all') {
+      conditions.push(`l.action = $${paramIndex}`);
+      params.push(action);
+      paramIndex++;
+    }
+    
+    if (module && module !== 'all') {
+      conditions.push(`l.module = $${paramIndex}`);
+      params.push(module);
+      paramIndex++;
+    }
+    
+    if (date_from) {
+      conditions.push(`DATE(l.created_at) >= $${paramIndex}`);
+      params.push(date_from);
+      paramIndex++;
+    }
+    
+    if (date_to) {
+      conditions.push(`DATE(l.created_at) <= $${paramIndex}`);
+      params.push(date_to);
+      paramIndex++;
+    }
+    
+    // Add pagination parameters
+    params.push(parseInt(limit));
+    params.push(parseInt(offset));
+    
+    // Build the full query
+    let query = `
+      SELECT l.*, u.name as user_name
+      FROM logs l
+      LEFT JOIN users u ON l.user_id = u.id
+    `;
+    
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(' AND ')}`;
+    }
+    
+    query += ` ORDER BY l.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    
+    const { rows } = await db.query(query, params);
     res.json(rows);
   } catch (error) {
     console.error('Error fetching logs:', error);
     res.status(500).json({ message: 'Error fetching logs' });
+  }
+});
+
+app.get('/api/logs/filters', async (req, res) => {
+  try {
+    // Get unique combinations of module and action from logs
+    const { rows } = await db.query(`
+      SELECT DISTINCT module, action
+      FROM logs
+      ORDER BY module, action
+    `);
+    
+    // Group actions by module
+    const modulesMap = new Map();
+    rows.forEach(row => {
+      if (!modulesMap.has(row.module)) {
+        modulesMap.set(row.module, []);
+      }
+      modulesMap.get(row.module).push(row.action);
+    });
+    
+    // Convert to the expected format
+    const modules = Array.from(modulesMap.entries()).map(([name, actions]) => ({
+      name,
+      actions: actions.sort() // Sort actions alphabetically
+    }));
+    
+    // Sort modules by name
+    modules.sort((a, b) => a.name.localeCompare(b.name));
+    
+    res.json({ modules });
+  } catch (error) {
+    console.error('Error fetching log filters:', error);
+    res.status(500).json({ message: 'Error fetching log filters' });
   }
 });
 
@@ -640,6 +811,11 @@ app.post('/api/shifts', async (req, res) => {
       'INSERT INTO shifts (user_id, start_time, end_time) VALUES ($1, $2, $3) RETURNING *',
       [user_id, start_time, end_time]
     );
+    
+    // Log the shift creation
+    const newShift = rows[0];
+    await logAction(null, user_id, 'UTWORZENIE_ZMIANY', 'Zmiana', `Utworzono nową zmianę dla użytkownika ${user_id} (start: ${start_time}, koniec: ${end_time})`);
+    
     res.status(201).json(rows[0]);
   } catch (error) {
     console.error('Error creating shift:', error);

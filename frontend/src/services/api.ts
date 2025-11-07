@@ -110,6 +110,15 @@ export interface Log {
   user_name?: string;
 }
 
+export interface LogFilter {
+  name: string;
+  actions: string[];
+}
+
+export interface LogFiltersResponse {
+  modules: LogFilter[];
+}
+
 // === USERS API ===
 export const usersAPI = {
   getAll: async (): Promise<User[]> => {
@@ -155,12 +164,55 @@ export const reportsAPI = {
 };
 
 export const logsAPI = {
-  getAll: async (limit: number = 100, offset: number = 0) => {
+  getAll: async (
+    limit: number = 100,
+    offset: number = 0,
+    filters?: {
+      user_id?: string;
+      action?: string;
+      module?: string;
+      date_from?: string;
+      date_to?: string;
+    }
+  ) => {
     try {
-      const response = await api.get(`/api/logs?limit=${limit}&offset=${offset}`);
+      // Build query parameters
+      const params = new URLSearchParams({
+        limit: limit.toString(),
+        offset: offset.toString(),
+      });
+      
+      // Add filter parameters if provided
+      if (filters) {
+        if (filters.user_id && filters.user_id !== 'all') {
+          params.append('user_id', filters.user_id);
+        }
+        if (filters.action && filters.action !== 'all') {
+          params.append('action', filters.action);
+        }
+        if (filters.module && filters.module !== 'all') {
+          params.append('module', filters.module);
+        }
+        if (filters.date_from) {
+          params.append('date_from', filters.date_from);
+        }
+        if (filters.date_to) {
+          params.append('date_to', filters.date_to);
+        }
+      }
+      
+      const response = await api.get(`/api/logs?${params.toString()}`);
       return response.data;
     } catch (error) {
       throw new Error('Failed to fetch logs');
+    }
+  },
+  getFilters: async (): Promise<LogFiltersResponse> => {
+    try {
+      const response = await api.get('/api/logs/filters');
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to fetch log filters');
     }
   },
   create: async (log: { user_id?: number; action: string; module: string; details: string }, user: User) => {
@@ -175,14 +227,9 @@ export const logsAPI = {
 
 // === AUTHENTICATION API ===
 export const authAPI = {
-  login: async (credentials: LoginRequest): Promise<LoginResponse> => {
-    try {
-      const response = await api.post('/auth/login', credentials);
-      return response.data;
-    } catch (error: any) {
-      const message = error.response?.data?.message || 'Login failed';
-      throw new Error(message);
-    }
+  login: async (userId: number, pin: string): Promise<LoginResponse> => {
+    const { data } = await api.post<LoginResponse>('/auth/login', { userId, pin });
+    return data;
   },
 
   logout: async (user: User): Promise<void> => {
@@ -196,12 +243,10 @@ export const authAPI = {
   },
 
   getCurrentUser: async (): Promise<User> => {
-    try {
-      const response = await api.get('/auth/me');
-      return response.data;
-    } catch (error) {
-      throw new Error('Failed to get user information');
-    }
+    // Ten endpoint musisz dodać na backendzie, na razie zwraca mock
+    // W MainLayout używasz `authAPI.me`, upewnij się, że logika jest spójna
+    const { data } = await api.get<User>('/auth/me');
+    return data;
   },
 };
 
@@ -343,7 +388,7 @@ export const ordersAPI = {
     await api.post(`/api/orders/${orderId}/complete`, { user });
   },
   
-update: async (orderId: number, items: any[], total: number, user: User): Promise<Order> => {
+  update: async (orderId: number, items: any[], total: number, user: User): Promise<Order> => {
     try {
       const { data } = await api.put(`/api/orders/${orderId}`, { items, total_price: total, user });
       return data;
@@ -360,10 +405,6 @@ update: async (orderId: number, items: any[], total: number, user: User): Promis
     }
   },
 };
-
-// === LOGS API (Duplicate removed - using original logsAPI) ===
-// Note: The newLogsAPI section has been removed to avoid confusion.
-// The original logsAPI (lines 157-174) is what the frontend uses.
 
 // === REPORTS API (placeholder - can be implemented later) ===
 export const newReportsAPI = {

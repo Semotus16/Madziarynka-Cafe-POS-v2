@@ -13,7 +13,7 @@ const MOCK_USERS: User[] = [
 ];
 
 type LoginScreenProps = {
-  onLogin: (user: User) => void;
+  onLogin: (user: User, token: string) => void;
 };
 
 export default function LoginScreen({ onLogin }: LoginScreenProps) {
@@ -48,33 +48,17 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
   };
 
   const handleLogin = async () => {
-    if (!selectedUser) {
-      toast.error('Wybierz użytkownika');
+    if (!selectedUser || pin.length !== 4) {
+      toast.error('Wybierz użytkownika i wprowadź 4-cyfrowy PIN');
       return;
     }
-    
-    if (pin.length !== 4) {
-      toast.error('Wprowadź 4-cyfrowy PIN');
-      return;
-    }
-
-    setIsLoading(true);
     try {
-      const response = await authAPI.login({
-        userId: selectedUser.id.toString(),
-        pin: pin
-      });
-      
-      localStorage.setItem('authToken', response.token);
-      toast.success(`Witaj, ${response.user.name}!`);
-      onLogin(response.user);
-    } catch (error: any) {
-      // ZMIANA: Lepsze logowanie błędów w konsoli przeglądarki.
+      const response = await authAPI.login(selectedUser.id, pin);
+      onLogin(response.user, response.token); // Przekazujemy użytkownika I TOKEN
+    } catch (error) {
       console.error("Błąd logowania:", error);
-      toast.error(error.message || 'Logowanie nie powiodło się');
+      toast.error("Nieprawidłowy PIN lub błąd serwera.");
       setPin('');
-    } finally {
-      setIsLoading(false);
     }
   };
 

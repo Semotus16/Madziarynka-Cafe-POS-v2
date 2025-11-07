@@ -10,8 +10,13 @@ export default function App() {
     null,
   );
 
-  const handleLogin = (user: User) => {
+  const handleLogin = (user: User, token: string) => {
     setCurrentUser(user);
+    
+    // Store the token in localStorage for authenticated requests
+    if (token) {
+      localStorage.setItem('authToken', token);
+    }
   };
 
   // ZMIANA: Poprawiona i kompletna logika wylogowania.
