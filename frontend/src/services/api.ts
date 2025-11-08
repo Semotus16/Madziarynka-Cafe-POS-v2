@@ -149,6 +149,33 @@ export const shiftsAPI = {
       throw new Error('Failed to create shift');
     }
   },
+  checkConflicts: async (userId: number, startTime: string, endTime: string, excludeShiftId?: number) => {
+    try {
+      const date = startTime.split('T')[0];
+      const response = await api.get(`/api/shifts?date=${date}&user_id=${userId}`);
+      const existingShifts = response.data;
+
+      // Sprawdź konflikty czasowe
+      const newStart = new Date(startTime).getTime();
+      const newEnd = new Date(endTime).getTime();
+
+      for (const shift of existingShifts) {
+        if (excludeShiftId && shift.id === excludeShiftId) continue;
+
+        const shiftStart = new Date(shift.start_time).getTime();
+        const shiftEnd = new Date(shift.end_time).getTime();
+
+        // Sprawdź czy przedziały czasowe się nakładają
+        if (newStart < shiftEnd && newEnd > shiftStart) {
+          return { hasConflict: true, conflictingShift: shift };
+        }
+      }
+
+      return { hasConflict: false };
+    } catch (error) {
+      throw new Error('Failed to check shift conflicts');
+    }
+  },
 };
 
 // === REPORTS API ===
@@ -446,7 +473,7 @@ export const newScheduleAPI = {
       throw new Error('Failed to fetch schedule');
     }
   },
-  
+
   create: async (schedule: any, user: User) => {
     try {
       // Placeholder implementation
@@ -455,7 +482,7 @@ export const newScheduleAPI = {
       throw new Error('Failed to create schedule');
     }
   },
-  
+
   update: async (id: string, schedule: any, user: User) => {
     try {
       // Placeholder implementation
@@ -464,12 +491,51 @@ export const newScheduleAPI = {
       throw new Error('Failed to update schedule');
     }
   },
-  
+
   delete: async (id: string, user: User) => {
     try {
       // Placeholder implementation - would need user_id for logging
     } catch (error) {
       throw new Error('Failed to delete schedule');
+    }
+  },
+};
+
+// === NOTES API ===
+export const notesAPI = {
+  getAll: async (date?: string) => {
+    try {
+      const query = date ? `?date=${date}` : '';
+      const response = await api.get(`/api/notes${query}`);
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to fetch notes');
+    }
+  },
+
+  create: async (note: { date: string; content: string }, user: User) => {
+    try {
+      const response = await api.post('/api/notes', { ...note, user_id: user.id });
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to create note');
+    }
+  },
+
+  update: async (id: number, note: { content: string }, user: User) => {
+    try {
+      const response = await api.put(`/api/notes/${id}`, { ...note, user_id: user.id });
+      return response.data;
+    } catch (error) {
+      throw new Error('Failed to update note');
+    }
+  },
+
+  delete: async (id: number, user: User) => {
+    try {
+      await api.delete(`/api/notes/${id}`, { data: { user_id: user.id } });
+    } catch (error) {
+      throw new Error('Failed to delete note');
     }
   },
 };

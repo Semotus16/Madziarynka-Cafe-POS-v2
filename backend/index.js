@@ -70,11 +70,11 @@ const logAction = async (transactionClient, userId, action, module, details) => 
     console.error('LogAction Błąd: Brak userId dla akcji:', action);
     return;
   }
-  
+
   try {
     let client;
     let shouldRelease = false;
-    
+
     if (transactionClient) {
       // Using provided transaction client
       client = transactionClient;
@@ -83,26 +83,116 @@ const logAction = async (transactionClient, userId, action, module, details) => 
       client = await getClient();
       shouldRelease = true;
     }
-    
+
     await client.query(
       'INSERT INTO logs (user_id, action, module, details) VALUES ($1, $2, $3, $4)',
       [userId, action, module, details]
     );
-    
+
     console.log(`Pomyślnie zalogowano akcję: ${action} przez użytkownika ${userId}`);
-    
+
     if (shouldRelease) {
       client.release();
     }
   } catch (error) {
     console.error(`Nie udało się zalogować akcji [${action}] dla użytkownika ${userId}:`, error);
-    
+
     // If we're in a transaction and logging fails, we should not throw
     // because the main operation should still succeed
     if (!transactionClient) {
       // For standalone operations, you might want to throw
       // but for logging, we typically don't want to fail the main operation
     }
+  }
+};
+
+// === AUTHORIZATION MIDDLEWARE ===
+// Middleware to check if user is admin
+const requireAdmin = async (req, res, next) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      return res.status(401).json({ message: 'Access token required' });
+    }
+
+    // Extract user ID from token
+    const userIdMatch = token.match(/^mock-jwt-for-(\d+)$/);
+    if (!userIdMatch) {
+      return res.status(403).json({ message: 'Invalid token format' });
+    }
+
+    const userId = parseInt(userIdMatch[1], 10);
+
+    // Check if user is admin
+    const { rows } = await db.query('SELECT role FROM users WHERE id = $1', [userId]);
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (rows[0].role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
+    req.user = { id: userId, role: rows[0].role };
+    next();
+  } catch (error) {
+    console.error('Admin authorization error:', error);
+    res.status(500).json({ message: 'Authorization error' });
+  }
+};
+
+// Middleware to check if user is admin or owns the resource
+const requireAdminOrOwnShift = async (req, res, next) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      return res.status(401).json({ message: 'Access token required' });
+    }
+
+    // Extract user ID from token
+    const userIdMatch = token.match(/^mock-jwt-for-(\d+)$/);
+    if (!userIdMatch) {
+      return res.status(403).json({ message: 'Invalid token format' });
+    }
+
+    const userId = parseInt(userIdMatch[1], 10);
+
+    // Check user role
+    const { rows: userRows } = await db.query('SELECT role FROM users WHERE id = $1', [userId]);
+    if (userRows.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const userRole = userRows[0].role;
+
+    // If admin, allow access
+    if (userRole === 'admin') {
+      req.user = { id: userId, role: userRole };
+      return next();
+    }
+
+    // If not admin, check if user owns the shift
+    const shiftId = req.params.id;
+    if (shiftId) {
+      const { rows: shiftRows } = await db.query('SELECT user_id FROM shifts WHERE id = $1', [shiftId]);
+      if (shiftRows.length === 0) {
+        return res.status(404).json({ message: 'Shift not found' });
+      }
+
+      if (shiftRows[0].user_id !== userId) {
+        return res.status(403).json({ message: 'Access denied: can only modify own shifts' });
+      }
+    }
+
+    req.user = { id: userId, role: userRole };
+    next();
+  } catch (error) {
+    console.error('Authorization error:', error);
+    res.status(500).json({ message: 'Authorization error' });
   }
 };
 
@@ -820,19 +910,19 @@ app.get('/api/shifts', async (req, res) => {
   try {
     const { date } = req.query;
     let query = `
-      SELECT s.*, u.name as user_name 
-      FROM shifts s 
+      SELECT s.*, u.name as user_name
+      FROM shifts s
       LEFT JOIN users u ON s.user_id = u.id
     `;
     let params = [];
-    
+
     if (date) {
       query += ' WHERE DATE(s.start_time) = $1';
       params = [date];
     }
-    
+
     query += ' ORDER BY s.start_time';
-    
+
     const { rows } = await db.query(query, params);
     res.json(rows);
   } catch (error) {
@@ -841,25 +931,170 @@ app.get('/api/shifts', async (req, res) => {
   }
 });
 
-// POST /api/shifts - Stwórz nową zmianę
-app.post('/api/shifts', async (req, res) => {
+// GET /api/shifts/weekly - Pobieranie zmian tygodniowych
+app.get('/api/shifts/weekly', async (req, res) => {
   try {
-    const { user_id, start_time, end_time } = req.body;
+    const { week_start } = req.query;
+    if (!week_start) {
+      return res.status(400).json({ message: 'week_start parameter is required (YYYY-MM-DD format)' });
+    }
+
+    // Calculate week end (7 days later)
+    const weekStart = new Date(week_start);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 7);
+
+    const query = `
+      SELECT s.*, u.name as user_name
+      FROM shifts s
+      LEFT JOIN users u ON s.user_id = u.id
+      WHERE s.start_time >= $1 AND s.start_time < $2
+      ORDER BY s.start_time
+    `;
+
+    const { rows } = await db.query(query, [weekStart.toISOString(), weekEnd.toISOString()]);
+    res.json(rows);
+  } catch (error) {
+    console.error('Error fetching weekly shifts:', error);
+    res.status(500).json({ message: 'Error fetching weekly shifts' });
+  }
+});
+
+// POST /api/shifts - Stwórz nową zmianę
+app.post('/api/shifts', requireAdmin, async (req, res) => {
+  try {
+    const { user_id, start_time, end_time, notes, break_duration, is_recurring, recurrence_pattern } = req.body;
+
+    // Walidacja biznesowa - sprawdź konflikty czasowe
+    const conflicts = await checkShiftConflicts(user_id, start_time, end_time);
+    if (conflicts.length > 0) {
+      return res.status(409).json({
+        message: 'Shift conflicts with existing shifts',
+        conflicts: conflicts
+      });
+    }
+
     const { rows } = await db.query(
-      'INSERT INTO shifts (user_id, start_time, end_time) VALUES ($1, $2, $3) RETURNING *',
-      [user_id, start_time, end_time]
+      'INSERT INTO shifts (user_id, start_time, end_time, notes, break_duration, is_recurring, recurrence_pattern) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+      [user_id, start_time, end_time, notes, break_duration, is_recurring, recurrence_pattern]
     );
-    
+
     // Log the shift creation
     const newShift = rows[0];
-    await logAction(null, user_id, 'UTWORZENIE_ZMIANY', 'Zmiana', `Utworzono nową zmianę dla użytkownika ${user_id} (start: ${start_time}, koniec: ${end_time})`);
-    
+    await logAction(null, req.user.id, 'UTWORZENIE_ZMIANY', 'Zmiana', `Utworzono nową zmianę dla użytkownika ${user_id} (start: ${start_time}, koniec: ${end_time})`);
+
     res.status(201).json(rows[0]);
   } catch (error) {
     console.error('Error creating shift:', error);
     res.status(500).json({ message: 'Error creating shift' });
   }
 });
+
+// PUT /api/shifts/:id - Zaktualizuj zmianę
+app.put('/api/shifts/:id', requireAdminOrOwnShift, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { user_id, start_time, end_time, notes, break_duration, is_recurring, recurrence_pattern } = req.body;
+
+    // Walidacja biznesowa - sprawdź konflikty czasowe (wykluczając bieżącą zmianę)
+    const conflicts = await checkShiftConflicts(user_id, start_time, end_time, id);
+    if (conflicts.length > 0) {
+      return res.status(409).json({
+        message: 'Shift conflicts with existing shifts',
+        conflicts: conflicts
+      });
+    }
+
+    const { rows } = await db.query(
+      'UPDATE shifts SET user_id = $1, start_time = $2, end_time = $3, notes = $4, break_duration = $5, is_recurring = $6, recurrence_pattern = $7 WHERE id = $8 RETURNING *',
+      [user_id, start_time, end_time, notes, break_duration, is_recurring, recurrence_pattern, id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Shift not found' });
+    }
+
+    // Log the shift update
+    await logAction(null, req.user.id, 'AKTUALIZACJA_ZMIANY', 'Zmiana', `Zaktualizowano zmianę #${id} (start: ${start_time}, koniec: ${end_time})`);
+
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('Error updating shift:', error);
+    res.status(500).json({ message: 'Error updating shift' });
+  }
+});
+
+// DELETE /api/shifts/:id - Usuń zmianę
+app.delete('/api/shifts/:id', requireAdminOrOwnShift, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Pobierz informacje o zmianie przed usunięciem dla logowania
+    const { rows: shiftRows } = await db.query('SELECT * FROM shifts WHERE id = $1', [id]);
+    if (shiftRows.length === 0) {
+      return res.status(404).json({ message: 'Shift not found' });
+    }
+
+    const shift = shiftRows[0];
+
+    // Usuń zmianę
+    await db.query('DELETE FROM shifts WHERE id = $1', [id]);
+
+    // Log the shift deletion
+    await logAction(null, req.user.id, 'USUNIĘCIE_ZMIANY', 'Zmiana', `Usunięto zmianę #${id} (start: ${shift.start_time}, koniec: ${shift.end_time})`);
+
+    res.json({ message: 'Shift deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting shift:', error);
+    res.status(500).json({ message: 'Error deleting shift' });
+  }
+});
+
+// GET /api/shifts/conflicts - Sprawdzanie konfliktów czasowych
+app.get('/api/shifts/conflicts', async (req, res) => {
+  try {
+    const { user_id, start_time, end_time, exclude_shift_id } = req.query;
+
+    if (!user_id || !start_time || !end_time) {
+      return res.status(400).json({ message: 'user_id, start_time, and end_time parameters are required' });
+    }
+
+    const conflicts = await checkShiftConflicts(user_id, start_time, end_time, exclude_shift_id);
+    res.json({ conflicts: conflicts });
+  } catch (error) {
+    console.error('Error checking shift conflicts:', error);
+    res.status(500).json({ message: 'Error checking conflicts' });
+  }
+});
+
+// Helper function to check shift conflicts
+async function checkShiftConflicts(userId, startTime, endTime, excludeShiftId = null) {
+  try {
+    let query = `
+      SELECT s.*, u.name as user_name
+      FROM shifts s
+      LEFT JOIN users u ON s.user_id = u.id
+      WHERE s.user_id = $1
+      AND (
+        (s.start_time <= $2 AND s.end_time > $2) OR
+        (s.start_time < $3 AND s.end_time >= $3) OR
+        (s.start_time >= $2 AND s.end_time <= $3)
+      )
+    `;
+    let params = [userId, startTime, endTime];
+
+    if (excludeShiftId) {
+      query += ' AND s.id != $4';
+      params.push(excludeShiftId);
+    }
+
+    const { rows } = await db.query(query, params);
+    return rows;
+  } catch (error) {
+    console.error('Error checking shift conflicts:', error);
+    throw error;
+  }
+}
 
 // === REPORTS ===
 // GET /api/reports/daily - Raport dzienny

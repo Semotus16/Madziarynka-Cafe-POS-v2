@@ -186,4 +186,146 @@
 
 html {
   font-size: var(--font-size);
+/* Schedule styles */
+.schedule-grid {
+  display: grid;
+  grid-template-columns: 80px repeat(7, 1fr);
+  gap: 0;
+}
+
+.schedule-time-column {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background: white;
+}
+
+.schedule-day-column {
+  min-width: 120px;
+}
+
+.schedule-time-slot {
+  height: 32px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.schedule-time-slot:hover {
+  background-color: #f9fafb;
+}
+
+.schedule-time-slot.occupied {
+  background-color: #fef3c7;
+}
+
+.schedule-shift-card {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  background: #d97706;
+  color: white;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  z-index: 20;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.schedule-shift-card:hover {
+  background: #b45309;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.schedule-day-header {
+  padding: 12px;
+  text-align: center;
+  font-weight: 500;
+  border-bottom: 2px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.schedule-day-header.today {
+  background: #fef3c7;
+  border-bottom-color: #d97706;
+  color: #92400e;
+}
+
+.schedule-week-navigation {
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.schedule-week-navigation h3 {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: #111827;
+  margin-bottom: 8px;
+}
+
+.schedule-current-week-btn {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.schedule-current-week-btn:hover {
+  color: #374151;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .schedule-grid {
+    grid-template-columns: 60px repeat(7, 1fr);
+  }
+
+  .schedule-day-column {
+    min-width: 100px;
+  }
+
+  .schedule-time-slot {
+    font-size: 0.7rem;
+  }
+
+  .schedule-shift-card {
+    font-size: 0.7rem;
+    padding: 2px 4px;
+  }
+}
+
+@media (max-width: 768px) {
+  .schedule-grid {
+    grid-template-columns: 50px repeat(7, 1fr);
+  }
+
+  .schedule-day-column {
+    min-width: 80px;
+  }
+
+  .schedule-day-header {
+    padding: 8px 4px;
+    font-size: 0.75rem;
+  }
+
+  .schedule-time-slot {
+    height: 28px;
+    font-size: 0.65rem;
+  }
+
+  .schedule-shift-card {
+    font-size: 0.65rem;
+    padding: 2px 3px;
+  }
+}
 }

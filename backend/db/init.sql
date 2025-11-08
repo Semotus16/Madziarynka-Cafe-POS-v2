@@ -67,8 +67,18 @@ CREATE TABLE IF NOT EXISTS shifts (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id),
     start_time TIMESTAMPTZ NOT NULL,
-    end_time TIMESTAMPTZ NOT NULL
+    end_time TIMESTAMPTZ NOT NULL,
+    notes TEXT,
+    break_duration INTEGER, -- w minutach
+    is_recurring BOOLEAN DEFAULT false,
+    recurrence_pattern VARCHAR(50) -- np. 'daily', 'weekly', 'monthly'
 );
+
+-- Indeksy dla lepszej wydajności
+CREATE INDEX IF NOT EXISTS idx_shifts_user_id ON shifts(user_id);
+CREATE INDEX IF NOT EXISTS idx_shifts_start_time ON shifts(start_time);
+CREATE INDEX IF NOT EXISTS idx_shifts_end_time ON shifts(end_time);
+CREATE INDEX IF NOT EXISTS idx_shifts_date_range ON shifts(DATE(start_time), DATE(end_time));
 
 -- Tabela Logów Systemowych
 CREATE TABLE IF NOT EXISTS logs (
